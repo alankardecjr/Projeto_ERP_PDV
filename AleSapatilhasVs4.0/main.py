@@ -113,7 +113,7 @@ class SistemaAleSapatilhas:
     def exibir_clientes(self):
         self.modo_atual = "clientes"
         self.lbl_titulo.config(text="👥 CADASTRO DE CLIENTES")
-        self.preparar_colunas(("id", "nome", "cpf", "telefone", "limite", "status"))
+        self.preparar_colunas(("id", "nome", "cpf", "telefone", "limite", "status"))    
         for c in database.exibir_clientes():
             self.tree.insert("", "end", values=(c[0], c[1], c[2], c[3], f"R$ {c[12]:.2f}", c[14]))
 

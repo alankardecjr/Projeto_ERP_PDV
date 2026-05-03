@@ -156,10 +156,15 @@ def cadastrar_cliente(nome, cpf, tel, email, niver, tam, endereco, bairro, cidad
         return False
 
 def exibir_clientes():
-    """Exibe clientes com formatação profissional."""
+    """Exibe clientes com ID e campos necessários para a interface."""
     with conectar() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito FROM clientes")
+        cursor.execute("""
+            SELECT id, nome, cpf, telefone, email, aniversario, 
+                   tamanho_calcado, endereco_completo, bairro, cidade, 
+                   cep, observacao, limite_credito, data_cadastro, status_cliente 
+            FROM clientes
+        """)
         return cursor.fetchall()
     
 def atualizar_cliente(cliente_id, **kwargs):
@@ -234,6 +239,20 @@ def quitar_titulo_financeiro(financeiro_id, forma_pgto):
 # ==========================================
 # RELATÓRIOS E DASHBOARD
 # ==========================================
+
+# Adicione isso ao seu arquivo database.py
+
+def relatorio_vendas_geral():
+    """Retorna o histórico de vendas com o nome do cliente vinculado."""
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT v.id, c.nome, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.data_venda, v.vendedor, v.status_venda
+            FROM vendas v
+            JOIN clientes c ON v.cliente_id = c.id
+            ORDER BY v.data_venda DESC
+        """)
+        return cursor.fetchall()
 
 def lancar_despesa(descricao, valor, categoria, vencimento, parcelas=1):
     """Lança uma conta a pagar (Ex: Aluguel, Luz, Fornecedor)."""
