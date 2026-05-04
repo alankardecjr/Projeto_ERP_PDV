@@ -7,27 +7,28 @@ class SistemaAleSapatilhas:
     def __init__(self, root):
         self.root = root
         self.root.title("Alê Sapatilhas - Gestão Integrada v4.0")
-        self.root.geometry("1200x750")
+        self.root.geometry("1400x880")
         
         # --- PALETA DE CORES ---
-        self.bg_fundo      = "#F1F5F9"
-        self.bg_card       = "#FFFFFF"
-        self.cor_borda     = "#CBD5E1"
-        self.cor_texto     = "#102343"
-        self.cor_lbl       = "#020C18"
-        self.cor_destaque  = "#6366F1"
-        self.cor_btn_menu  = "#1E293B"
-        self.cor_btn_sair  = "#25324E"
-        self.cor_btn_acao  = "#425074"
-        self.cor_hover_btn = "#5B7FB5"
+        self.bg_fundo       = "#F1F5F9"
+        self.bg_card        = "#FFFFFF"
+        self.cor_borda      = "#8BA2BD"
+        self.cor_texto      = "#0B1933"
+        self.cor_lbl        = "#020C18"
+        self.cor_destaque   = "#6366F1" 
+        self.cor_btn_menu   = "#1E293B"
+        self.cor_btn_sair   = "#25324E"
+        self.cor_btn_acao   = "#425074" 
+        self.cor_hover_btn  = "#6F7CA0" 
 
         self.root.configure(bg=self.bg_fundo)
         self.modo_atual = "clientes" 
         
         self.setup_ui()
-        self.exibir_clientes()
+        self.exibir_clientes() # Inicia visualizando clientes
 
     def setup_ui(self):
+        # Sidebar
         self.sidebar = tk.Frame(self.root, bg=self.cor_btn_sair, width=220)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
@@ -60,18 +61,19 @@ class SistemaAleSapatilhas:
                 tk.Label(self.sidebar, bg=self.cor_btn_sair, pady=10).pack()
                 continue
             
-            cor_bg = self.cor_btn_sair if "SAIR" in texto else self.cor_btn_menu
             btn = tk.Button(self.sidebar, text=texto, command=comando, **btn_estilo)
             btn.pack(fill="x", pady=2)
             btn.bind("<Enter>", lambda e, b=btn: b.config(bg=self.cor_hover_btn))
-            btn.bind("<Leave>", lambda e, b=btn, c=cor_bg: b.config(bg=c))
+            btn.bind("<Leave>", lambda e, b=btn: b.config(bg=self.cor_btn_menu))
 
+        # Container Principal
         self.container = tk.Frame(self.root, bg=self.bg_fundo, padx=20, pady=20)
         self.container.pack(side="right", fill="both", expand=True)
 
+        # Barra de Busca
         search_frame = tk.Frame(self.container, bg=self.bg_fundo)
         search_frame.pack(fill="x", pady=(0, 10))
-        tk.Label(search_frame, text="🔍 BUSCA RÁPIDA", font=("Segoe UI", 12), bg=self.bg_fundo).pack(side="left")
+        tk.Label(search_frame, text="🔍 BUSCA RÁPIDA", font=("Segoe UI", 10, "bold"), bg=self.bg_fundo).pack(side="left")
         self.ent_busca = tk.Entry(search_frame, font=("Segoe UI", 11), bg=self.bg_card, relief="flat", 
                                   highlightthickness=1, highlightbackground=self.cor_borda)
         self.ent_busca.pack(side="left", padx=10, fill="x", expand=True, ipady=4)
@@ -81,6 +83,7 @@ class SistemaAleSapatilhas:
                                    bg=self.bg_fundo, fg=self.cor_texto)
         self.lbl_titulo.pack(anchor="w", pady=(0, 10))
 
+        # Tabela (Treeview)
         self.style = ttk.Style()
         self.style.theme_use("clam")
         self.style.configure("Treeview", background=self.bg_card, foreground=self.cor_texto, rowheight=35, borderwidth=0, font=("Segoe UI", 10))
@@ -96,8 +99,8 @@ class SistemaAleSapatilhas:
         scrollbar = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
         scrollbar.pack(side="right", fill="y")
         self.tree.configure(yscrollcommand=scrollbar.set)
-        
-        # Binds de interação
+
+        # Bindings de interação
         self.tree.bind("<Double-1>", lambda e: self.editar_selecionado())
         self.tree.bind("<Button-3>", self.mostrar_menu_contexto)
 
@@ -108,21 +111,24 @@ class SistemaAleSapatilhas:
             self.tree.heading(col, text=col.upper())
             self.tree.column(col, anchor="center", width=120)
 
-    # --- EXIBIÇÃO DE DADOS ---
+    # --- FUNÇÕES DE CARREGAMENTO ---
 
     def exibir_clientes(self):
         self.modo_atual = "clientes"
         self.lbl_titulo.config(text="👥 CADASTRO DE CLIENTES")
         self.preparar_colunas(("id", "nome", "cpf", "telefone", "limite", "status"))    
         for c in database.exibir_clientes():
+            # c[12] é limite_credito, c[14] é status_cliente
             self.tree.insert("", "end", values=(c[0], c[1], c[2], c[3], f"R$ {c[12]:.2f}", c[14]))
 
     def exibir_produtos(self):
         self.modo_atual = "produtos"
         self.lbl_titulo.config(text="👠 ESTOQUE DE PRODUTOS")
-        self.preparar_colunas(("id", "sku", "produto", "marca", "tamanho", "estoque", "preço", "status"))
+        # Ajustado para bater com a ordem do database.exibir_produtos()
+        self.preparar_colunas(("id", "sku", "produto", "cor", "tamanho", "estoque", "preço", "status"))
         for i in database.exibir_produtos():
-            self.tree.insert("", "end", values=(i[0], i[1], i[2], i[3], i[5], i[8], f"R$ {i[7]:.2f}", i[11]))
+            # i[7] é quantidade, i[6] é precovenda, i[11] é status_item
+            self.tree.insert("", "end", values=(i[0], i[1], i[2], i[3], i[4], i[7], f"R$ {i[6]:.2f}", i[11]))
 
     def exibir_vendas(self):
         self.modo_atual = "vendas"
@@ -139,8 +145,7 @@ class SistemaAleSapatilhas:
             cursor = conn.cursor()
             cursor.execute("SELECT id, tipo, entidade_nome, descricao, valor, data_vencimento, status FROM financeiro ORDER BY data_vencimento DESC")
             for f in cursor.fetchall():
-                valor_fmt = f"R$ {f[4]:.2f}"
-                self.tree.insert("", "end", values=(f[0], f[1], f[2], f[3], valor_fmt, f[5], f[6]))
+                self.tree.insert("", "end", values=(f[0], f[1], f[2], f[3], f"R$ {f[4]:.2f}", f[5], f[6]))
 
     def exibir_dashboard(self):
         res = database.dashboard_resumo()
@@ -152,15 +157,14 @@ class SistemaAleSapatilhas:
         else: msg += "\n✅ Estoque em dia!"
         messagebox.showinfo("Dashboard Pro", msg)
 
-    # --- FUNÇÕES DE CADASTRO E EDIÇÃO ---
+    # --- JANELAS (Imports Lazy para evitar erros de circularidade) ---
 
     def abrir_cadastro_vendas(self):
         selection = self.tree.selection()
         if self.modo_atual == "clientes" and selection:
             valores = self.tree.item(selection, "values")
             from cadastro_vendas import JanelaCadastroVendas
-            janela = JanelaCadastroVendas(self.root, cliente_id=valores[0], nome_cliente=valores[1])
-            self.root.wait_window(janela)
+            JanelaCadastroVendas(self.root, cliente_id=valores[0], nome_cliente=valores[1])
             self.exibir_vendas()
         else:
             messagebox.showwarning("Atenção", "Selecione um CLIENTE na lista para iniciar a venda.")
@@ -168,20 +172,17 @@ class SistemaAleSapatilhas:
 
     def abrir_cadastro_despesas(self):
         from cadastro_despesas import JanelaCadastroDespesas
-        janela = JanelaCadastroDespesas(self.root)
-        self.root.wait_window(janela)
+        JanelaCadastroDespesas(self.root)
         self.exibir_financeiro()
 
     def abrir_cadastro_cliente(self):
         from cadastro_clientes import JanelaCadastroClientes
-        janela = JanelaCadastroClientes(self.root)
-        self.root.wait_window(janela)
+        JanelaCadastroClientes(self.root)
         self.exibir_clientes()
 
     def abrir_cadastro_produto(self):
         from cadastro_produtos import JanelaCadastroProdutos
-        janela = JanelaCadastroProdutos(self.root)
-        self.root.wait_window(janela)
+        JanelaCadastroProdutos(self.root)
         self.exibir_produtos()
 
     def editar_selecionado(self):
@@ -196,8 +197,7 @@ class SistemaAleSapatilhas:
                 cursor.execute("SELECT * FROM clientes WHERE id = ?", (id_banco,))
                 dados = cursor.fetchone()
                 if dados: 
-                    janela = JanelaCadastroClientes(self.root, dados_cliente=dados)
-                    self.root.wait_window(janela)
+                    JanelaCadastroClientes(self.root, dados_cliente=dados)
                     self.exibir_clientes()
 
         elif self.modo_atual == "produtos":
@@ -207,11 +207,8 @@ class SistemaAleSapatilhas:
                 cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_banco,))
                 dados = cursor.fetchone()
                 if dados: 
-                    janela = JanelaCadastroProdutos(self.root, dados_produto=dados)
-                    self.root.wait_window(janela)
+                    JanelaCadastroProdutos(self.root, dados_produto=dados)
                     self.exibir_produtos()
-
-    # --- MENU DE CONTEXTO (SOFT DELETE) ---
 
     def mostrar_menu_contexto(self, event):
         item = self.tree.identify_row(event.y)
@@ -231,34 +228,32 @@ class SistemaAleSapatilhas:
         id_banco = self.tree.item(item, "values")[0]
         
         if messagebox.askyesno("Confirmar", "Deseja realmente desativar este registro?"):
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                if self.modo_atual == "clientes":
-                    cursor.execute("UPDATE clientes SET status_cliente = 'Inativo' WHERE id = ?", (id_banco,))
-                    self.exibir_clientes()
-                elif self.modo_atual == "produtos":
-                    cursor.execute("UPDATE produtos SET status_item = 'Indisponível' WHERE id = ?", (id_banco,))
-                    self.exibir_produtos()
-                conn.commit()
+            if self.modo_atual == "clientes":
+                database.atualizar_cliente(id_banco, status_cliente='Inativo')
+                self.exibir_clientes()
+            elif self.modo_atual == "produtos":
+                database.atualizar_produto(id_banco, status_item='Indisponível')
+                self.exibir_produtos()
 
     def quitar_selecionado(self):
         item = self.tree.selection()
         if not item: return
         id_banco = self.tree.item(item, "values")[0]
-        # Implementar janela de confirmação de pagamento ou chamar função direta do database
         database.quitar_titulo_financeiro(id_banco, "Dinheiro")
         self.exibir_financeiro()
 
-    # --- UTILITÁRIOS ---
-
     def filtrar_busca(self):
         termo = self.ent_busca.get().lower()
+        # Primeiro, torna todas as linhas visíveis novamente (reattach)
         for item in self.tree.get_children():
-            valores = self.tree.item(item)['values']
-            if any(termo in str(v).lower() for v in valores):
-                self.tree.reattach(item, '', 'end')
-            else: 
-                self.tree.detach(item)
+            self.tree.reattach(item, '', 'end')
+            
+        # Agora oculta (detach) as que não batem com o termo
+        if termo != "":
+            for item in self.tree.get_children():
+                valores = self.tree.item(item)['values']
+                if not any(termo in str(v).lower() for v in valores):
+                    self.tree.detach(item)
 
     def confirmar_saida(self):
         if messagebox.askyesno("Sair", "Deseja encerrar o sistema Ale Sapatilhas?"):
