@@ -19,7 +19,7 @@ class JanelaCadastroClientes(tk.Toplevel):
         self.cor_hover_btn  = "#5B7FB5"
         self.cor_hover_field = "#484AD6" 
         
-        self.title("Alê Sapatilhas - Cadastro de Clientes")
+        self.title("Alê Sapatilhas - Gestão de Clientes")
         self.geometry("500x820")
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
@@ -189,9 +189,9 @@ class JanelaCadastroClientes(tk.Toplevel):
         self.var_status.set(d[14])
         
         # Ajuste visual para modo edição
-        self.btn_salvar.config(text="ATUALIZAR CADASTRO", bg=self.cor_destaque)
-        self.configurar_hovers() # Recarrega a lógica de hover com a nova cor base
-
+        self.btn_salvar.config(text="ATUALIZAR CADASTRO",bg=self.cor_btn_acao, fg="white")
+        self.configurar_hovers() 
+        
 if __name__ == "__main__":
     root = tk.Tk()
     root.withdraw() 
