@@ -20,7 +20,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.cor_hover_field = "#484AD6" 
 
         self.title("Alê Sapatilhas - Gestão de Estoque")
-        self.geometry("550x850") # Altura levemente reduzida para telas padrão
+        self.geometry("600x850") 
         self.resizable(False, False)
         self.configure(bg=self.bg_fundo)
 
@@ -67,16 +67,16 @@ class JanelaCadastroProdutos(tk.Toplevel):
 
         def criar_campo(parent, texto, row, col=0, colspan=2):
             tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, 
-                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(2, 0))
+                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(3, 0))
             ent = tk.Entry(parent, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto,
                            relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=2, padx=(0, 5) if colspan==1 else 0)
+            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=3, padx=(0, 5) if colspan==1 else 0)
             aplicar_estilo_foco(ent)
             return ent
 
         def criar_combo(parent, texto, lista, row, col, span=1):
             tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, 
-                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(2, 0))
+                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(3, 0))
             combo = ttk.Combobox(parent, values=lista, font=("Segoe UI", 10), state="readonly")
             combo.set(lista[0])
             combo.grid(row=row+1, column=col, columnspan=span, sticky="ew", padx=(0, 5) if col==0 else 0)
@@ -91,11 +91,10 @@ class JanelaCadastroProdutos(tk.Toplevel):
         
         self.ent_busca_interna = tk.Entry(main_frame, font=("Segoe UI", 10), bg=self.bg_card, relief="flat",
                                           highlightbackground=self.cor_borda, highlightthickness=1)
-        self.ent_busca_interna.grid(row=2, column=0, columnspan=2, sticky="ew", ipady=2)
+        self.ent_busca_interna.grid(row=2, column=0, columnspan=2, sticky="ew", ipady=3)
         self.ent_busca_interna.bind("<KeyRelease>", self.filtrar_busca_interna)
         aplicar_estilo_foco(self.ent_busca_interna)
 
-        # Treeview Ajustada: Troca de COR por FORNECEDOR
         self.tree_busca = ttk.Treeview(main_frame, columns=("id", "prod", "forn"), show="headings", height=3, style="Busca.Treeview")
         self.tree_busca.heading("id", text="ID")
         self.tree_busca.heading("prod", text="MODELO")
@@ -116,10 +115,10 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.ent_custo.bind("<KeyRelease>", self.calcular_markup)
         
         tk.Label(main_frame, text="PREÇO DE VENDA (R$)*", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=11, column=1, sticky="w", pady=(2, 0))
+                 font=("Segoe UI", 8, "bold")).grid(row=11, column=1, sticky="w", pady=(3, 0))
         self.ent_venda = tk.Entry(main_frame, font=("Segoe UI", 10, "bold"), bg="#E2E8F0", fg=self.cor_destaque, 
                                   relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-        self.ent_venda.grid(row=12, column=1, sticky="ew", ipady=2)
+        self.ent_venda.grid(row=12, column=1, sticky="ew", ipady=3)
 
         self.ent_forn = criar_campo(main_frame, "FORNECEDOR*", 13)
 
@@ -135,26 +134,26 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.ent_qtd = criar_campo(frame_grade, "QUANTIDADE*", 4, col=0, colspan=1)
         
         tk.Label(frame_grade, text="STATUS DO ITEM*", bg=self.bg_card, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=4, column=1, sticky="w", pady=(2, 0))
+                 font=("Segoe UI", 8, "bold")).grid(row=4, column=1, sticky="w", pady=(3, 0))
         self.var_status = tk.StringVar(value="Disponível")
         self.opt_status = tk.OptionMenu(frame_grade, self.var_status, *self.list_status)
         self.opt_status.config(bg=self.bg_fundo, fg=self.cor_texto, relief="flat", highlightthickness=1, 
                                 highlightbackground=self.cor_borda, font=("Segoe UI", 9), cursor="hand2")
         self.opt_status.grid(row=5, column=1, sticky="ew", pady=(1, 0))
 
-        # --- BOTÕES (TAMANHO REDUZIDO) ---
+        # --- BOTÕES (Padronizados com mesmo tamanho/ipady) ---
         texto_botao = "ATUALIZAR PRODUTO" if self.produto_id else "SALVAR PRODUTO"
         cor_base_acao = self.cor_hover_field if self.produto_id else self.cor_btn_acao
 
         self.btn_salvar = tk.Button(main_frame, text=texto_botao, bg=cor_base_acao, fg="white", 
                                     font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                     command=self.validar_e_salvar)
-        self.btn_salvar.grid(row=17, column=0, columnspan=2, pady=(15, 0), sticky="ew", ipady=6)
+        self.btn_salvar.grid(row=17, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
         
         self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_sair, fg="white", 
                                       font=("Segoe UI", 9, "bold"), relief="flat", cursor="hand2", 
                                       command=self.destroy)
-        self.btn_cancelar.grid(row=18, column=0, columnspan=2, pady=(5, 0), sticky="ew", ipady=4)
+        self.btn_cancelar.grid(row=18, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
 
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_salvar.bind("<Leave>", lambda e: e.widget.config(bg=cor_base_acao))
@@ -176,7 +175,6 @@ class JanelaCadastroProdutos(tk.Toplevel):
     def atualizar_tree_busca(self):
         self.tree_busca.delete(*self.tree_busca.get_children())
         for p in database.exibir_produtos():
-            # id, sku, produto, cor, tam, custo, venda, qtd, cat, mat, forn...
             self.tree_busca.insert("", "end", values=(p[0], p[2], p[10]))
 
     def filtrar_busca_interna(self, event=None):
@@ -223,12 +221,15 @@ class JanelaCadastroProdutos(tk.Toplevel):
                     quantidade=d["qtd"], categoria=d["cat"], material=d["mat"], 
                     fornecedor=d["forn"], status_item=d["status"]
                 )
+                messagebox.showinfo("Sucesso", "Produto atualizado!")
             else:
                 database.cadastrar_produto(
                     d["sku"], d["produto"], d["cor"], d["tam"], 
                     d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"]
                 )
+                messagebox.showinfo("Sucesso", "Produto cadastrado!")
             
+            # --- ATUALIZAÇÃO DA TREEVIEW APÓS O OK ---
             if hasattr(self.master, "exibir_produtos"):
                 self.master.exibir_produtos()
             
@@ -247,7 +248,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.cb_cat.set(d[8]); self.cb_mat.set(d[9])
         self.ent_forn.delete(0, tk.END); self.ent_forn.insert(0, d[10] if d[10] else "")
         self.var_status.set(d[11])
-        self.btn_salvar.config(text="ATUALIZAR DADOS", bg=self.cor_hover_field)
+        self.btn_salvar.config(text="ATUALIZAR PRODUTO", bg=self.cor_hover_field)
 
 if __name__ == "__main__":
     root = tk.Tk(); root.withdraw()
