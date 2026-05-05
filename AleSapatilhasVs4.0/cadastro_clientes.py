@@ -6,7 +6,7 @@ class JanelaCadastroClientes(tk.Toplevel):
     def __init__(self, master, dados_cliente=None):
         super().__init__(master)
 
-        # --- PALETA DE CORES ---
+        # --- Paleta de cores (Padronizada) ---
         self.bg_fundo       = "#F1F5F9"
         self.bg_card        = "#FFFFFF"
         self.cor_borda      = "#8BA2BD"
@@ -19,8 +19,9 @@ class JanelaCadastroClientes(tk.Toplevel):
         self.cor_hover_btn  = "#6F7CA0" 
         self.cor_hover_field = "#484AD6"  
         
+       # --- Configurações da janela ---
         self.title("Alê Sapatilhas - Gestão de Clientes")
-        self.geometry("550x700") 
+        self.geometry("600x700")
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
 
@@ -39,6 +40,7 @@ class JanelaCadastroClientes(tk.Toplevel):
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
 
+        # --- Função para aplicar estilo de foco nos campos ---
         def aplicar_estilo_foco(ent):
             def on_enter(e):
                 if self.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
@@ -51,20 +53,21 @@ class JanelaCadastroClientes(tk.Toplevel):
             ent.bind("<FocusIn>", on_focus_in)
             ent.bind("<FocusOut>", on_focus_out)
 
+        # --- Função para criar campos de entrada com rótulos ---
         def criar_campo(parent, texto, row, col=0, colspan=2):
             tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, 
-                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(4, 0)) # Reduzi pady
+                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(3, 0)) 
             ent = tk.Entry(parent, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto,
                            relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=2, padx=(0, 5) if colspan==1 else 0)
+            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=3, padx=(0, 5) if colspan==1 else 0)
             aplicar_estilo_foco(ent)
             return ent
 
-        # Título
+        # --- Título ---
         tk.Label(main_frame, text="Ficha Cadastral do Cliente", bg=self.bg_fundo, 
-                 fg=self.cor_texto, font=("Segoe UI", 14, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 5))
+                 fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 5))
 
-        # Campos de Entrada (Reduzi os intervalos de row para comprimir o layout)
+        # --- Campos de entrada - usando função para evitar repetição ---
         self.ent_nome   = criar_campo(main_frame, "NOME COMPLETO*", 1)
         self.ent_cpf    = criar_campo(main_frame, "CPF (APENAS NÚMEROS)*", 3)
         self.ent_tel    = criar_campo(main_frame, "TELEFONE / WHATSAPP*", 5, col=0, colspan=1)
@@ -76,6 +79,7 @@ class JanelaCadastroClientes(tk.Toplevel):
         self.ent_cidade = criar_campo(main_frame, "CIDADE", 11, col=1, colspan=1)
         self.ent_cep    = criar_campo(main_frame, "CEP", 13, col=0, colspan=1)       
         
+        # --- Limite de crédito ---
         tk.Label(main_frame, text="LIMITE DE CRÉDITO", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=13, column=1, sticky="w", pady=(4,0))
         self.ent_limite = tk.Entry(main_frame, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
         self.ent_limite.grid(row=14, column=1, sticky="ew", ipady=2)
@@ -84,7 +88,7 @@ class JanelaCadastroClientes(tk.Toplevel):
 
         self.ent_obs = criar_campo(main_frame, "OBSERVAÇÕES", 15)
 
-        # Status do Cliente (OptionMenu/Status)
+        # --- Status do cliente (OptionMenu/Status) ---
         tk.Label(main_frame, text="CLASSIFICAÇÃO", bg=self.bg_fundo, fg=self.cor_lbl, 
                  font=("Segoe UI", 8, "bold")).grid(row=17, column=0, sticky="w", pady=(8, 0))
         
@@ -94,28 +98,28 @@ class JanelaCadastroClientes(tk.Toplevel):
                                 highlightbackground=self.cor_borda, font=("Segoe UI", 10), cursor="hand2")
         self.opt_status.grid(row=18, column=0, columnspan=2, sticky="ew", pady=(2, 0))
 
-        # --- BOTÕES ---
-        texto_btn = "ATUALIZAR CADASTRO" if self.cliente_id else "SALVAR CLIENTE"
+        # --- Botões ---
+        texto_btn = "ATUALIZAR CADASTRO" if self.cliente_id else "SALVAR CADASTRO"
         cor_base_acao = self.cor_hover_field if self.cliente_id else self.cor_btn_acao
 
         self.btn_salvar = tk.Button(main_frame, text=texto_btn, bg=cor_base_acao, fg="white", 
                                     font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                     command=self.salvar_dados)
-        self.btn_salvar.grid(row=19, column=0, columnspan=2, pady=(20, 0), sticky="ew", ipady=8)
+        self.btn_salvar.grid(row=19, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
         
         self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_sair, fg="white", 
                                       font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                       command=self.destroy)
-        self.btn_cancelar.grid(row=20, column=0, columnspan=2, pady=(5, 0), sticky="ew", ipady=8)
+        self.btn_cancelar.grid(row=20, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
 
-        # Hovers
+        # --- Hovers ---
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_salvar.bind("<Leave>", lambda e: e.widget.config(bg=cor_base_acao))
         self.btn_cancelar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_cancelar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_btn_sair))
 
+    # --- Lógica de validar campos e salvar no banco ---
     def salvar_dados(self):
-        # Lógica de salvar (mantida igual)
         d = {
             "nome": self.ent_nome.get().strip(),
             "cpf": self.ent_cpf.get().strip(),
@@ -133,7 +137,7 @@ class JanelaCadastroClientes(tk.Toplevel):
         }
         
         if not d["nome"] or not d["cpf"] or not d["tel"]:
-            messagebox.showwarning("Atenção", "Preencha Nome, CPF e Telefone obrigatoriamente.")
+            messagebox.showwarning("Atenção", "Preencha os campos obrigatórios.")
             return
 
         try:

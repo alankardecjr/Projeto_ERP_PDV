@@ -6,7 +6,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
     def __init__(self, master, dados_produto=None):
         super().__init__(master)
         
-        # --- PALETA DE CORES (Padronizada) ---
+        # --- Paleta de cores (Padronizada) ---
         self.bg_fundo       = "#F1F5F9"
         self.bg_card        = "#FFFFFF"
         self.cor_borda      = "#8BA2BD"
@@ -19,22 +19,26 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.cor_hover_btn  = "#6F7CA0" 
         self.cor_hover_field = "#484AD6" 
 
+       # --- Configurações da janela ---
         self.title("Alê Sapatilhas - Gestão de Estoque")
-        self.geometry("600x850") 
-        self.resizable(False, False)
+        self.geometry("600x850")
         self.configure(bg=self.bg_fundo)
+        self.resizable(False, False)
+
+        self.root.configure(bg=self.bg_fundo)
+        self.root.resizable(False, False)
 
         self.produto_id = dados_produto[0] if dados_produto else None
         
-        self.list_categorias = ["Biquinis", "Botas", "Mules", "Rasteiras", "Roupas", "Salto Block", "Salto Fino", "Sapatilhas", "Tênis"]     
-        self.list_materiais = ["Algodão", "Couro", "Napa", "Nobuck", "Poliamida", "PU", "Suplex", "Verniz"]      
+        self.list_categorias = ["Sapatilhas", "Rasteiras", "Salto Fino", "Salto Block", "Mules", "Tênis", "Botas", "Biquinis", "Roupas"]     
+        self.list_materiais = ["Couro", "Camurça", "Nobuck", "PU", "Verniz", "Algodão", "Poliamida", "Suplex"]      
         self.list_tamanhos = [str(i) for i in range(33, 41)] + ["G", "GG", "M", "P", "U"]        
-        self.list_cores = ["Amarelo", "Azul", "Branco", "Caramelo", "Nude", "Off", "Outros", "Preto", "Rosa", "Verde", "Vermelho"]
+        self.list_cores = ["Amarelo", "Azul", "Branco", "Caramelo", "Massala", "Nude", "Off", "Preto", "Rosa", "Verde", "Vermelho"]
         self.list_status = ["Disponível", "Indisponível", "Esgotado", "Promocional"]
 
         self.setup_styles()
         self.criar_widgets()
-        
+    
         if dados_produto:
             self.preencher_dados(dados_produto)
      
@@ -48,11 +52,13 @@ class JanelaCadastroProdutos(tk.Toplevel):
         style.configure("Busca.Treeview", background="#F8FAFC", rowheight=22, font=("Segoe UI", 9))
 
     def criar_widgets(self):
-        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=25, pady=5)
+        # --- Usando um frame centralizado para garantir que os widgets não fujam ---
+        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=10)
         main_frame.pack(fill="both", expand=True)
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
 
+        # --- Função para aplicar estilo de foco nos campos ---
         def aplicar_estilo_foco(ent):
             def on_enter(e):
                 if self.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
@@ -65,6 +71,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
             ent.bind("<FocusIn>", on_focus_in)
             ent.bind("<FocusOut>", on_focus_out)
 
+        # --- Função para criar campos de entrada com rótulos ---
         def criar_campo(parent, texto, row, col=0, colspan=2):
             tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, 
                      font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(3, 0))
@@ -73,7 +80,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
             ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=3, padx=(0, 5) if colspan==1 else 0)
             aplicar_estilo_foco(ent)
             return ent
-
+        # --- Função para criar comboboxes ---
         def criar_combo(parent, texto, lista, row, col, span=1):
             tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, 
                      font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(3, 0))
@@ -82,12 +89,12 @@ class JanelaCadastroProdutos(tk.Toplevel):
             combo.grid(row=row+1, column=col, columnspan=span, sticky="ew", padx=(0, 5) if col==0 else 0)
             return combo
 
-        # --- TÍTULO E BUSCA RÁPIDA ---
+        # --- Título e busca rápida ---
         tk.Label(main_frame, text="Ficha Cadastral do Produto", bg=self.bg_fundo, 
                  fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
 
-        tk.Label(main_frame, text="Busca Rápida", bg=self.bg_fundo, 
-                 fg=self.cor_destaque, font=("Segoe UI", 9, "bold")).grid(row=1, column=0, sticky="w", pady=(5, 0))
+        tk.Label(main_frame, text="🔍 BUSCA RÁPIDA", bg=self.bg_fundo, 
+                 fg=self.cor_destaque, font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", pady=(5, 0))
         
         self.ent_busca_interna = tk.Entry(main_frame, font=("Segoe UI", 10), bg=self.bg_card, relief="flat",
                                           highlightbackground=self.cor_borda, highlightthickness=1)
@@ -105,7 +112,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
 
         tk.Frame(main_frame, height=1, bg=self.cor_borda).grid(row=4, column=0, columnspan=2, sticky="ew", pady=5)
 
-        # --- FORMULÁRIO COMPACTADO ---
+        # --- Campos de entrada - usando função para evitar repetição ---
         self.ent_sku     = criar_campo(main_frame, "CÓDIGO DO PRODUTO*", 5)
         self.ent_produto = criar_campo(main_frame, "DESCRIÇÃO DO MODELO*", 7)
         self.cb_cat      = criar_combo(main_frame, "CATEGORIA*", self.list_categorias, 9, 0)
@@ -122,6 +129,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
 
         self.ent_forn = criar_campo(main_frame, "FORNECEDOR*", 13)
 
+        # --- Grade de estoque ---
         tk.Label(main_frame, text="GRADE DE ESTOQUE", bg=self.bg_fundo, fg=self.cor_texto, 
                  font=("Segoe UI", 9, "bold")).grid(row=15, column=0, sticky="w", pady=(10, 2))
         
@@ -133,6 +141,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.cb_tam = criar_combo(frame_grade, "TAMANHO*", self.list_tamanhos, 2, 0, 2)
         self.ent_qtd = criar_campo(frame_grade, "QUANTIDADE*", 4, col=0, colspan=1)
         
+        # --- Status do item (OptionMenu/Status) ---
         tk.Label(frame_grade, text="STATUS DO ITEM*", bg=self.bg_card, fg=self.cor_lbl, 
                  font=("Segoe UI", 8, "bold")).grid(row=4, column=1, sticky="w", pady=(3, 0))
         self.var_status = tk.StringVar(value="Disponível")
@@ -141,7 +150,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
                                 highlightbackground=self.cor_borda, font=("Segoe UI", 9), cursor="hand2")
         self.opt_status.grid(row=5, column=1, sticky="ew", pady=(1, 0))
 
-        # --- BOTÕES (Padronizados com mesmo tamanho/ipady) ---
+        # --- Botões ---
         texto_botao = "ATUALIZAR PRODUTO" if self.produto_id else "SALVAR PRODUTO"
         cor_base_acao = self.cor_hover_field if self.produto_id else self.cor_btn_acao
 
@@ -151,10 +160,11 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.btn_salvar.grid(row=17, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
         
         self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_sair, fg="white", 
-                                      font=("Segoe UI", 9, "bold"), relief="flat", cursor="hand2", 
+                                      font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                       command=self.destroy)
         self.btn_cancelar.grid(row=18, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
 
+        # --- Hovers ---
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_salvar.bind("<Leave>", lambda e: e.widget.config(bg=cor_base_acao))
         self.btn_cancelar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
@@ -162,6 +172,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
 
         self.atualizar_tree_busca()
 
+    # --- Cálculo automático do preço de venda com base no custo ---
     def calcular_markup(self, event=None):
         try:
             custo = self.ent_custo.get().replace(",", ".")
@@ -172,6 +183,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         except ValueError:
             self.ent_venda.delete(0, tk.END)
 
+    # --- Atualiza a treeview da busca rápida com os produtos do banco ---
     def atualizar_tree_busca(self):
         self.tree_busca.delete(*self.tree_busca.get_children())
         for p in database.exibir_produtos():
@@ -192,8 +204,9 @@ class JanelaCadastroProdutos(tk.Toplevel):
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_prod,))
             dados = cursor.fetchone()
-            if dados: self.preencher_dados(dados)
-
+            if dados: self.preencher_dados(dados
+                                           )
+    # --- Lógica de validar campos e salvar no banco ---
     def validar_e_salvar(self):
         try:
             d = {
@@ -210,7 +223,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
                 "status": self.var_status.get()
             }
 
-            if not all([d["produto"], d["custo"], d["qtd"]]):
+            if not all([d["produto"], d["cor"], d["custo"], d["qtd"]]):
                 messagebox.showwarning("Atenção", "Preencha os campos obrigatórios.")
                 return
 
@@ -229,7 +242,6 @@ class JanelaCadastroProdutos(tk.Toplevel):
                 )
                 messagebox.showinfo("Sucesso", "Produto cadastrado!")
             
-            # --- ATUALIZAÇÃO DA TREEVIEW APÓS O OK ---
             if hasattr(self.master, "exibir_produtos"):
                 self.master.exibir_produtos()
             
@@ -248,9 +260,11 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.cb_cat.set(d[8]); self.cb_mat.set(d[9])
         self.ent_forn.delete(0, tk.END); self.ent_forn.insert(0, d[10] if d[10] else "")
         self.var_status.set(d[11])
+
         self.btn_salvar.config(text="ATUALIZAR PRODUTO", bg=self.cor_hover_field)
 
 if __name__ == "__main__":
-    root = tk.Tk(); root.withdraw()
+    root = tk.Tk()
+    root.withdraw()
     JanelaCadastroProdutos(root)
     root.mainloop()

@@ -2,14 +2,16 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import database 
 from datetime import datetime
-
 class SistemaAleSapatilhas:
     def __init__(self, root):
         self.root = root
         self.root.title("Alê Sapatilhas - Gestão Integrada v4.0")
-        self.root.geometry("1400x880")
-        
-        # --- PALETA DE CORES ---
+        # 1. Captura a largura e altura total do monitor
+        largura = self.root.winfo_screenwidth()
+        altura = self.root.winfo_screenheight()
+        self.root.geometry(f"{largura}x{altura-70}+0+0") 
+           
+        # --- Paleta de cores (Padronizada) ---
         self.bg_fundo       = "#F1F5F9"
         self.bg_card        = "#FFFFFF"
         self.cor_borda      = "#8BA2BD"
@@ -33,7 +35,7 @@ class SistemaAleSapatilhas:
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
 
-        tk.Label(self.sidebar, text="ALÊ\nSAPATILHAS", font=("Segoe UI", 16, "bold"), 
+        tk.Label(self.sidebar, text="ALÊ\nSAPATILHAS", font=("Segoe UI", 18, "bold"), 
                  bg=self.cor_btn_sair, fg="white", pady=20).pack()
 
         btn_estilo = {
@@ -60,21 +62,22 @@ class SistemaAleSapatilhas:
             if texto == "":
                 tk.Label(self.sidebar, bg=self.cor_btn_sair, pady=10).pack()
                 continue
-            
+
+            # --- Criando botões com estilo e hover ---
             btn = tk.Button(self.sidebar, text=texto, command=comando, **btn_estilo)
             btn.pack(fill="x", pady=2)
             btn.bind("<Enter>", lambda e, b=btn: b.config(bg=self.cor_hover_btn))
             btn.bind("<Leave>", lambda e, b=btn: b.config(bg=self.cor_btn_menu))
 
-        # Container Principal
+        # --- Container Principal para exibir conteúdo dinâmico ---
         self.container = tk.Frame(self.root, bg=self.bg_fundo, padx=20, pady=20)
         self.container.pack(side="right", fill="both", expand=True)
 
-        # Barra de Busca
+        # --- Barra de busca rápida ---
         search_frame = tk.Frame(self.container, bg=self.bg_fundo)
         search_frame.pack(fill="x", pady=(0, 10))
         tk.Label(search_frame, text="🔍 BUSCA RÁPIDA", font=("Segoe UI", 10, "bold"), bg=self.bg_fundo).pack(side="left")
-        self.ent_busca = tk.Entry(search_frame, font=("Segoe UI", 11), bg=self.bg_card, relief="flat", 
+        self.ent_busca = tk.Entry(search_frame, font=("Segoe UI", 10), bg=self.bg_card, relief="flat", 
                                   highlightthickness=1, highlightbackground=self.cor_borda)
         self.ent_busca.pack(side="left", padx=10, fill="x", expand=True, ipady=4)
         self.ent_busca.bind("<KeyRelease>", lambda e: self.filtrar_busca())
@@ -83,7 +86,7 @@ class SistemaAleSapatilhas:
                                    bg=self.bg_fundo, fg=self.cor_texto)
         self.lbl_titulo.pack(anchor="w", pady=(0, 10))
 
-        # Tabela (Treeview)
+        # --- Tabela (Treeview) ---
         self.style = ttk.Style()
         self.style.theme_use("clam")
         self.style.configure("Treeview", background=self.bg_card, foreground=self.cor_texto, rowheight=35, borderwidth=0, font=("Segoe UI", 10))
@@ -100,10 +103,11 @@ class SistemaAleSapatilhas:
         scrollbar.pack(side="right", fill="y")
         self.tree.configure(yscrollcommand=scrollbar.set)
 
-        # Bindings de interação
+        # --- Bindings de interação ---
         self.tree.bind("<Double-1>", lambda e: self.editar_selecionado())
         self.tree.bind("<Button-3>", self.mostrar_menu_contexto)
-
+        
+    # --- Função para preparar colunas da Treeview de acordo com o modo atual ---
     def preparar_colunas(self, colunas):
         self.tree.delete(*self.tree.get_children())
         self.tree["columns"] = colunas
@@ -111,8 +115,7 @@ class SistemaAleSapatilhas:
             self.tree.heading(col, text=col.upper())
             self.tree.column(col, anchor="center", width=120)
 
-    # --- FUNÇÕES DE CARREGAMENTO ---
-
+    # --- Funções de carregamento ---
     def exibir_clientes(self):
         self.modo_atual = "clientes"
         self.lbl_titulo.config(text="👥 CADASTRO DE CLIENTES")
@@ -157,8 +160,7 @@ class SistemaAleSapatilhas:
         else: msg += "\n✅ Estoque em dia!"
         messagebox.showinfo("Dashboard Pro", msg)
 
-    # --- JANELAS (Imports Lazy para evitar erros de circularidade) ---
-
+    # --- Janelas (Imports Lazy para evitar erros de circularidade) ---
     def abrir_cadastro_vendas(self):
         selection = self.tree.selection()
         if self.modo_atual == "clientes" and selection:
@@ -210,6 +212,7 @@ class SistemaAleSapatilhas:
                     JanelaCadastroProdutos(self.root, dados_produto=dados)
                     self.exibir_produtos()
 
+    # --- Função para mostrar menu de contexto ---
     def mostrar_menu_contexto(self, event):
         item = self.tree.identify_row(event.y)
         if item:
