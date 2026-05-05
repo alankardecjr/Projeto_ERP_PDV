@@ -1,301 +1,152 @@
 import tkinter as tk
-from tkinter import messagebox
-import database 
-
-class JanelaCadastroDespesas(tk.Toplevel):
-    def __init__(self, master):
-        super().__init__(master)
-
-        # --- PALETA DE CORES ---
-        self.bg_fundo = "#f4f5f9"
-        self.bg_card = "#ffffff"
-        self.cor_borda = "#d1d5db"
-        self.cor_texto = "#1f2937"
-        self.cor_lbl = "#4b5563"
-        self.cor_btn_salvar = "#4b5563" 
-        self.cor_btn_cancelar = "#1f2937" 
-        self.cor_hover_field = "#3b82f6" 
-        self.cor_hover_btn = "#6b7280"
-
-        self.title("Alê Sapatilhas - Lançamento de Despesas")
-        self.geometry("450x750")
-        self.configure(bg=self.bg_fundo)
-        self.resizable(False, False)
-
-        self.criar_widgets()
-        self.grab_set() # Foca a atenção nesta janela
-
-    def criar_widgets(self):
-        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=25, pady=20)
-        main_frame.pack(fill="both", expand=True)
-
-        # --- AUXILIARES DE ESTILO ---
-        def ao_entrar_botao(e, cor): e.widget.config(bg=cor)
-        def ao_sair_botao(e, cor): e.widget.config(bg=cor)
-
-        def criar_campo(parent, texto, row, col=0, colspan=2):
-            tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, 
-                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(10, 0))
-            
-            ent = tk.Entry(parent, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto,
-                           relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=5)
-            
-            ent.bind("<FocusIn>", lambda e: e.widget.config(highlightbackground=self.cor_hover_field, highlightthickness=2))
-            ent.bind("<FocusOut>", lambda e: e.widget.config(highlightbackground=self.cor_borda, highlightthickness=1))
-            return ent
-
-        # --- HEADER ---
-        tk.Label(main_frame, text="Nova Despesa", bg=self.bg_fundo, 
-                 fg=self.cor_texto, font=("Segoe UI", 14, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 10))
-
-        # --- FORMULÁRIO ---
-        self.ent_desc = criar_campo(main_frame, "DESCRIÇÃO", 1)
-        
-        self.ent_valor = criar_campo(main_frame, "VALOR (R$)", 3)
-        self.ent_valor.insert(0, "0.00")
-
-        # --- TIPO DE DESPESA (Check constraint no banco: 'Fixo' ou 'Adicional') ---
-        tk.Label(main_frame, text="TIPO DE GASTO", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=5, column=0, sticky="w", pady=(15, 0))
-        
-        self.var_tipo = tk.StringVar(value="Fixo")
-        frame_radio = tk.Frame(main_frame, bg=self.bg_fundo)
-        frame_radio.grid(row=6, column=0, columnspan=2, sticky="w")
-        
-        tk.Radiobutton(frame_radio, text="Fixo (Mensal)", variable=self.var_tipo, value="Fixo", 
-                       bg=self.bg_fundo, font=("Segoe UI", 9)).pack(side="left", padx=(0, 15))
-        tk.Radiobutton(frame_radio, text="Adicional / Compra", variable=self.var_tipo, value="Adicional", 
-                       bg=self.bg_fundo, font=("Segoe UI", 9)).pack(side="left")
-
-        # --- CATEGORIA ---
-        tk.Label(main_frame, text="CATEGORIA", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=7, column=0, sticky="w", pady=(15, 0))
-        
-        self.var_cat = tk.StringVar(value="Infraestrutura")
-        categorias = ["Infraestrutura", "Compra de Mercadoria", "Marketing", "Salários", "Impostos", "Outros"]
-        self.opt_cat = tk.OptionMenu(main_frame, self.var_cat, *categorias)
-        self.opt_cat.config(bg=self.bg_card, relief="flat", highlightthickness=1, highlightbackground=self.cor_borda, cursor="hand2")
-        self.opt_cat.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(5, 0))
-
-        # --- BOTÕES ---
-        self.btn_salvar = tk.Button(main_frame, text="CONFIRMAR LANÇAMENTO", bg=self.cor_btn_salvar, fg="white", 
-                                    font=("Segoe UI", 9, "bold"), relief="flat", cursor="hand2", 
-                                    command=self.salvar_despesa)
-        self.btn_salvar.grid(row=9, column=0, columnspan=2, pady=(30, 0), sticky="ew", ipady=8)
-        self.btn_salvar.bind("<Enter>", lambda e: ao_entrar_botao(e, self.cor_hover_btn))
-        self.btn_salvar.bind("<Leave>", lambda e: ao_sair_botao(e, self.cor_btn_salvar))
-
-        self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_cancelar, fg="white", 
-                                       font=("Segoe UI", 9, "bold"), relief="flat", cursor="hand2", 
-                                       command=self.destroy)
-        self.btn_cancelar.grid(row=10, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=5)
-        self.btn_cancelar.bind("<Enter>", lambda e: ao_entrar_botao(e, "#374151"))
-        self.btn_cancelar.bind("<Leave>", lambda e: ao_sair_botao(e, self.cor_btn_cancelar))
-
-        main_frame.columnconfigure(0, weight=1)
-
-    def salvar_despesa(self):
-        desc = self.ent_desc.get().strip()
-        valor_raw = self.ent_valor.get().replace(",", ".").strip()
-        tipo = self.var_tipo.get()
-        cat = self.var_cat.get()
-
-        if not desc or not valor_raw:
-            messagebox.showwarning("Atenção", "Preencha a descrição e o valor.")
-            return
-
-        try:
-            valor = float(valor_raw)
-            # Chama a função do banco de dados (database.py)
-            database.registrar_despesa(desc, valor, tipo, cat)
-            
-            messagebox.showinfo("Sucesso", f"Lançamento de {cat} registrado!")
-            self.destroy()
-        except ValueError:
-            messagebox.showerror("Erro", "O valor inserido é inválido. Use números (ex: 150.50)")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Falha ao salvar: {e}")
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.withdraw()
-    JanelaCadastroDespesas(root)
-    root.mainloop()
-
-
-    vs 2
-
-    import tkinter as tk
 from tkinter import messagebox, ttk
-import database 
 from datetime import datetime
 
 class JanelaCadastroDespesas(tk.Toplevel):
-    def __init__(self, master):
+    def __init__(self, master, dados_despesa=None):
         super().__init__(master)
 
-        # --- Paleta de cores (Padronizada) ---
-        self.bg_fundo = "#F1F5F9"
-        self.bg_card = "#FFFFFF"
-        self.cor_borda = "#8BA2BD"
-        self.cor_texto = "#0B1933"
-        self.cor_lbl = "#020C18"
-        self.cor_destaque = "#6366F1" 
-        self.cor_btn_acao = "#425074" 
-        self.cor_btn_sair = "#25324E"
+        # --- Paleta de cores ---
+        self.bg_fundo       = "#F1F5F9"
+        self.bg_card        = "#FFFFFF"
+        self.cor_borda      = "#8BA2BD"
+        self.cor_texto      = "#0B1933"
+        self.cor_lbl        = "#020C18"
+        self.cor_destaque   = "#6366F1" 
+        self.cor_btn_menu   = "#1E293B"
+        self.cor_btn_sair   = "#25324E"
+        self.cor_btn_acao   = "#425074" 
+        self.cor_hover_btn  = "#6F7CA0" 
         self.cor_hover_field = "#484AD6" 
 
-        # --- Configurações da janela ---
-        self.title("Alê Sapatilhas - Lançamento Financeiro")
-        self.geometry("600x780")
+        # --- Configurações da Janela ---
+        self.title("Alê Sapatilhas - Gestão Financeira")
+        self.geometry("600x820") 
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
+        
+        self.despesa_id = dados_despesa[0] if dados_despesa else None
+        
+        self.list_formas = ["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX", "Boleto", "Outros"]
+        self.list_categorias = ["Infraestrutura", "Compra Mercadoria", "Marketing", "Salários", "Impostos", "Outros"]
+        self.list_recorrencia = ["Não Recorrente", "Fixa Mensal", "Parcelar"]
+        self.list_status = ["Pendente", "Pago", "Atrasado", "Cancelado"]
 
+        self.setup_styles()
         self.criar_widgets()
         
-        # --- Bloqueia a interação com a janela principal até que esta seja fechada ---
+        if dados_despesa:
+            self.preencher_dados(dados_despesa)
+            
         self.grab_set()
 
-    def formatar_data_para_bd(self, data_str):
-        # --- Converte para o formato brasileiro dd/mm/aaaa do formato iso aaaa-mm-dd do sqlite ---
-        try:
-            return datetime.strptime(data_str, "%d/%m/%Y").strftime("%Y-%m-%d")
-        except ValueError:
-            return None
+    def setup_styles(self):
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # Configuração para igualar a altura do Combobox ao Entry com ipady=5
+        style.configure("TCombobox", 
+                        fieldbackground=self.bg_card, 
+                        background=self.bg_card, 
+                        bordercolor=self.cor_borda,
+                        lightcolor=self.cor_borda,
+                        darkcolor=self.cor_borda,
+                        arrowsize=15)
+        
+        # Ajuste específico para a altura do campo de texto do Combobox
+        style.layout("TCombobox", style.layout("TCombobox"))
+        
+        style.configure("Hist.Treeview", background="#F8FAFC", rowheight=25, font=("Segoe UI", 9))
+        style.configure("Hist.Treeview.Heading", font=("Segoe UI", 8, "bold"))
 
     def criar_widgets(self):
-        # --- Cria o container principal com preenchimento interno para organização dos elementos ---
-        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=30, pady=20)
-        main_frame.pack(fill="both", expand=True)
-        main_frame.columnconfigure(0, weight=1)
+        # Frame centralizador para garantir que o conteúdo não fique "colado" nas bordas
+        self.container = tk.Frame(self, bg=self.bg_fundo)
+        self.container.place(relx=0.5, rely=0.5, anchor="center") # Centraliza o bloco todo na tela
 
-        def aplicar_foco(ent):
-            # --- Gerencia a alteração visual das bordas quando o campo recebe ou perde o foco do teclado ---
-            ent.bind("<FocusIn>", lambda e: e.widget.config(highlightbackground=self.cor_destaque, highlightthickness=2))
-            ent.bind("<FocusOut>", lambda e: e.widget.config(highlightbackground=self.cor_borda, highlightthickness=1))
+        main_frame = tk.Frame(self.container, bg=self.bg_fundo, padx=10, pady=10)
+        main_frame.pack()
+        
+        # --- Helpers de Estilo ---
+        def aplicar_estilo_foco(ent):
+            def on_enter(e): ent.config(highlightbackground=self.cor_hover_field)
+            def on_leave(e): ent.config(highlightbackground=self.cor_borda)
+            ent.bind("<Enter>", on_enter)
+            ent.bind("<Leave>", on_leave)
 
-        def criar_campo(parent, texto, row, col=0, colspan=2, pad=10):
-            # --- Função utilitária para padronizar a criação de rótulos e campos de entrada de texto ---
-            tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, 
-                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(pad, 0))
-            ent = tk.Entry(parent, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto,
-                            relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=5)
-            aplicar_foco(ent)
+        def criar_campo(parent, texto, row, col, colspan=1):
+            tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(8, 0), padx=5)
+            ent = tk.Entry(parent, font=("Segoe UI", 10), bg=self.bg_card, relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
+            # ipady=5 define a altura interna do Entry
+            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=5, padx=5)
+            aplicar_estilo_foco(ent)
             return ent
 
-        # --- Título superior da ficha de lançamento ---
-        tk.Label(main_frame, text="Lançamento de Despesa", bg=self.bg_fundo, 
-                 fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 20))
+        # --- Título ---
+        tk.Label(main_frame, text="Ficha Cadastro Despesa", bg=self.bg_fundo, 
+                 fg=self.cor_texto, font=("Segoe UI", 14, "bold")).grid(row=0, column=0, columnspan=3, pady=(0, 20))
 
-        # --- Campos para entrada de descrição, valor total e data de vencimento ---
-        self.ent_desc = criar_campo(main_frame, "DESCRIÇÃO DA DESPESA / FORNECEDOR", 1)
-        self.ent_valor = criar_campo(main_frame, "VALOR TOTAL (R$)", 3)
-        self.ent_valor.insert(0, "0.00")
+        # --- BUSCA RÁPIDA ---
+        tk.Label(main_frame, text="🔍 BUSCA RÁPIDA", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 9, "bold")).grid(row=1, column=0, sticky="w", padx=5)
+        self.ent_busca_interna = tk.Entry(main_frame, font=("Segoe UI", 9), bg=self.bg_card, relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
+        self.ent_busca_interna.grid(row=2, column=0, columnspan=3, sticky="ew", padx=5, ipady=5)
         
-        # --- Define a data atual já no formato brasileiro como sugestão padrão ---
-        hoje_br = datetime.now().strftime("%d/%m/%Y")
-        self.ent_vencimento = criar_campo(main_frame, "DATA VENCIMENTO (DD/MM/AAAA)", 5)
-        self.ent_vencimento.insert(0, hoje_br)
+        self.tree_busca = ttk.Treeview(main_frame, columns=("id", "ent", "desc", "valor"), show="headings", height=3)
+        for col in ("id", "ent", "desc", "valor"): 
+            self.tree_busca.heading(col, text=col.upper())
+            self.tree_busca.column(col, width=130, anchor="w")
+        self.tree_busca.grid(row=3, column=0, columnspan=3, sticky="ew", pady=10, padx=5)
 
-        # --- Seleção da categoria para classificação no fluxo de caixa ---
-        tk.Label(main_frame, text="CATEGORIA", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=7, column=0, sticky="w", pady=(15, 0))
+        # --- FORMULÁRIO ---
+        self.ent_entidade = criar_campo(main_frame, "FORNECEDOR / ENTIDADE*", 4, 0, colspan=3)
+        self.ent_desc = criar_campo(main_frame, "DESCRIÇÃO DA DESPESA*", 6, 0, colspan=3)
+
+        # Linha: Valor, Vencimento e Status
+        self.ent_valor = criar_campo(main_frame, "VALOR (R$)*", 8, 0)
+        self.ent_vencimento = criar_campo(main_frame, "VENCIMENTO*", 8, 1)
+        self.ent_vencimento.insert(0, datetime.now().strftime("%d/%m/%Y"))
         
-        self.var_cat = tk.StringVar(value="Infraestrutura")
-        categorias = ["Infraestrutura", "Compra de Mercadoria", "Marketing", "Pró-labore", "Impostos", "Manutenção", "Outros"]
-        self.opt_cat = ttk.Combobox(main_frame, textvariable=self.var_cat, values=categorias, state="readonly", font=("Segoe UI", 10))
-        self.opt_cat.grid(row=8, column=0, columnspan=2, sticky="ew", ipady=3)
+        tk.Label(main_frame, text="STATUS*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=8, column=2, sticky="w", pady=(8, 0), padx=5)
+        self.cb_status = ttk.Combobox(main_frame, values=self.list_status, state="readonly", font=("Segoe UI", 10))
+        self.cb_status.set("Pendente")
+        # Para o Combobox parecer ter a mesma altura do Entry com ipady=5, usamos pady no grid
+        self.cb_status.grid(row=9, column=2, sticky="ew", padx=5, ipady=3) 
 
-        # --- Divisor visual para a seção de parcelamento ---
-        tk.Frame(main_frame, height=1, bg=self.cor_borda).grid(row=9, column=0, columnspan=2, sticky="ew", pady=20)
+        # Linha: Categoria, Forma e Recorrência
+        tk.Label(main_frame, text="CATEGORIA*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=10, column=0, sticky="w", pady=(8, 0), padx=5)
+        self.cb_cat = ttk.Combobox(main_frame, values=self.list_categorias, state="readonly", font=("Segoe UI", 10))
+        self.cb_cat.grid(row=11, column=0, sticky="ew", padx=5, ipady=3)
+
+        tk.Label(main_frame, text="FORMA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=10, column=1, sticky="w", pady=(8, 0), padx=5)
+        self.cb_forma = ttk.Combobox(main_frame, values=self.list_formas, state="readonly", font=("Segoe UI", 10))
+        self.cb_forma.set("Dinheiro")
+        self.cb_forma.grid(row=11, column=1, sticky="ew", padx=5, ipady=3)
+
+        tk.Label(main_frame, text="RECORRÊNCIA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=10, column=2, sticky="w", pady=(8, 0), padx=5)
+        self.cb_recorrencia = ttk.Combobox(main_frame, values=self.list_recorrencia, state="readonly", font=("Segoe UI", 10))
+        self.cb_recorrencia.set("Não Recorrente")
+        self.cb_recorrencia.grid(row=11, column=2, sticky="ew", padx=5, ipady=3)
+
+        # --- Treeview Histórico ---
+        tk.Label(main_frame, text="DETALHES DAS PARCELAS", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 8, "bold")).grid(row=12, column=0, columnspan=3, sticky="w", pady=(15, 2), padx=5)
+        self.tree_pagos = ttk.Treeview(main_frame, columns=("parc", "venc", "valor", "status"), show="headings", height=4, style="Hist.Treeview")
+        for col in ("parc", "venc", "valor", "status"):
+            self.tree_pagos.heading(col, text=col.upper())
+            self.tree_pagos.column(col, width=100, anchor="center")
+        self.tree_pagos.grid(row=13, column=0, columnspan=3, sticky="ew", padx=5)
+
+        # --- Botões ---
+        self.btn_salvar = tk.Button(main_frame, text="SALVAR DESPESA", bg=self.cor_btn_acao, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2")
+        self.btn_salvar.grid(row=14, column=0, columnspan=3, pady=(20, 5), sticky="ew", ipady=8)
         
-        # --- Controle para habilitar ou desabilitar o desdobramento da despesa em parcelas ---
-        self.var_parcelado = tk.BooleanVar(value=False)
-        self.chk_parc = tk.Checkbutton(main_frame, text="DESPESA PARCELADA?", variable=self.var_parcelado,
-                                       bg=self.bg_fundo, font=("Segoe UI", 9, "bold"), fg=self.cor_destaque,
-                                       command=self.toggle_parcelas, activebackground=self.bg_fundo)
-        self.chk_parc.grid(row=10, column=0, sticky="w")
+        self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_sair, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.destroy)
+        self.btn_cancelar.grid(row=15, column=0, columnspan=3, pady=5, sticky="ew", ipady=8)
 
-        # --- Frame dinâmico que aparece apenas se a opção parcelada for selecionada ---
-        self.frame_parc = tk.Frame(main_frame, bg=self.bg_fundo)
-        
-        tk.Label(self.frame_parc, text="QTD PARCELAS", bg=self.bg_fundo, font=("Segoe UI", 8, "bold")).pack(side="left")
-        self.ent_qtd_parc = tk.Entry(self.frame_parc, width=5, font=("Segoe UI", 10), highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_qtd_parc.pack(side="left", padx=10)
-        self.ent_qtd_parc.insert(0, "1")
-        self.ent_qtd_parc.bind("<KeyRelease>", self.atualizar_calculo_parcela)
-
-        self.lbl_info_parc = tk.Label(self.frame_parc, text="= 1x de R$ 0.00", bg=self.bg_fundo, 
-                                      fg=self.cor_btn_acao, font=("Segoe UI", 9, "italic"))
-        self.lbl_info_parc.pack(side="left", padx=5)
-
-        # --- Botões de ação para confirmar o registro ou cancelar a operação ---
-        self.btn_salvar = tk.Button(main_frame, text="CONFIRMAR LANÇAMENTO", bg=self.cor_btn_acao, fg="white", 
-                                    font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
-                                    command=self.validar_e_salvar)
-        self.btn_salvar.grid(row=12, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
-
-        self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_sair, fg="white", 
-                                       font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
-                                       command=self.destroy)
-        self.btn_cancelar.grid(row=13, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
-
-    def toggle_parcelas(self):
-        # --- Alterna a exibição dos campos de parcelamento conforme a marcação do checkbox ---
-        if self.var_parcelado.get():
-            self.frame_parc.grid(row=11, column=0, columnspan=2, sticky="w", pady=10)
-            self.atualizar_calculo_parcela()
-        else:
-            self.frame_parc.grid_forget()
-            self.ent_qtd_parc.delete(0, tk.END)
-            self.ent_qtd_parc.insert(0, "1")
-
-    def atualizar_calculo_parcela(self, event=None):
-        # --- Realiza o cálculo aritmético do valor de cada parcela baseando-se no valor total e na quantidade informada ---
-        try:
-            total = float(self.ent_valor.get().replace(",", "."))
-            qtd = int(self.ent_qtd_parc.get())
-            if qtd < 1: qtd = 1
-            valor_parc = total / qtd
-            self.lbl_info_parc.config(text=f"= {qtd}x de R$ {valor_parc:.2f}")
-        except:
-            self.lbl_info_parc.config(text="= Valor inválido")
-
-    def validar_e_salvar(self):
-        # --- Valida os dados inseridos e invoca a função de persistência no banco de dados para registrar a despesa ---
-        desc = self.ent_desc.get().strip()
-        valor_raw = self.ent_valor.get().replace(",", ".").strip()
-        data_br = self.ent_vencimento.get().strip()
-        cat = self.var_cat.get()
-        qtd_parc = self.ent_qtd_parc.get().strip()
-
-        # --- Converte a data do formato visual (BR) para o formato do banco (ISO) ---
-        vencimento_iso = self.formatar_data_para_bd(data_br)
-
-        if not desc or not valor_raw or not vencimento_iso:
-            messagebox.showwarning("Atenção", "Verifique os campos. A data deve ser DD/MM/AAAA.")
-            return
-
-        try:
-            valor_total = float(valor_raw)
-            parcelas = int(qtd_parc) if self.var_parcelado.get() else 1
-            
-            # --- Envia os dados para a camada de persistência para gerar os títulos financeiros ---
-            database.lancar_despesa(desc, valor_total, cat, vencimento_iso, parcelas)
-            
-            messagebox.showinfo("Sucesso", f"Despesa '{desc}' lançada com sucesso!")
-            
-            if hasattr(self.master, "exibir_financeiro"):
-                self.master.exibir_financeiro()
-                
-            self.destroy()
-        except Exception as e:
-            messagebox.showerror("Erro", f"Falha ao salvar: {e}")
+        # Ajuste de pesos das colunas para centralização interna
+        main_frame.columnconfigure((0, 1, 2), weight=1)
 
 if __name__ == "__main__":
     root = tk.Tk()
     root.withdraw()
-    JanelaCadastroDespesas(root)
+    app = JanelaCadastroDespesas(root)
     root.mainloop()

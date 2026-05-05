@@ -84,7 +84,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
             combo.grid(row=row+1, column=col, columnspan=span, sticky="ew", padx=(0, 5) if col==0 else 0)
             return combo
 
-        tk.Label(main_frame, text="Ficha Cadastral do Produto", bg=self.bg_fundo, 
+        tk.Label(main_frame, text="Ficha Cadastro Produto", bg=self.bg_fundo, 
                  fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
 
         tk.Label(main_frame, text="🔍 BUSCA RÁPIDA", bg=self.bg_fundo, 

@@ -64,7 +64,7 @@ class JanelaCadastroClientes(tk.Toplevel):
             return ent
 
         # --- Título ---
-        tk.Label(main_frame, text="Ficha Cadastral do Cliente", bg=self.bg_fundo, 
+        tk.Label(main_frame, text="Ficha Cadastro Cliente", bg=self.bg_fundo, 
                  fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 5))
 
         # --- Campos ---

@@ -45,8 +45,20 @@ class JanelaCadastroDespesas(tk.Toplevel):
     def setup_styles(self):
         style = ttk.Style()
         style.theme_use('clam')
-        style.configure("TCombobox", fieldbackground=self.bg_card, background=self.bg_card, bordercolor=self.cor_borda)
-        style.configure("Hist.Treeview", background="#F8FAFC", rowheight=22, font=(9))
+        
+        # Configuração para igualar a altura do Combobox ao Entry com ipady=5
+        style.configure("TCombobox", 
+                        fieldbackground=self.bg_card, 
+                        background=self.bg_card, 
+                        bordercolor=self.cor_borda,
+                        lightcolor=self.cor_borda,
+                        darkcolor=self.cor_borda,
+                        arrowsize=15)
+        
+        # Ajuste específico para a altura do campo de texto do Combobox
+        style.layout("TCombobox", style.layout("TCombobox"))
+        
+        style.configure("Hist.Treeview", background="#F8FAFC", rowheight=25, font=("Segoe UI", 9))
         style.configure("Hist.Treeview.Heading", font=("Segoe UI", 8, "bold"))
 
     def formatar_data_para_bd(self, data_str):
@@ -55,9 +67,13 @@ class JanelaCadastroDespesas(tk.Toplevel):
         except: return None
 
     def criar_widgets(self):
-        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=25, pady=15)
-        main_frame.pack(fill="both", expand=True)
-        
+        # Frame centralizador para garantir que o conteúdo não fique "colado" nas bordas
+        self.container = tk.Frame(self, bg=self.bg_fundo)
+        self.container.place(relx=0.5, rely=0.48, anchor="center")
+
+        main_frame = tk.Frame(self.container, bg=self.bg_fundo, padx=10, pady=10)
+        main_frame.pack()
+
         # --- Helpers de Estilo ---
         def aplicar_estilo_foco(ent):
             def on_enter(e):
@@ -72,12 +88,18 @@ class JanelaCadastroDespesas(tk.Toplevel):
             ent.bind("<FocusOut>", on_focus_out)
 
         def criar_campo(parent, texto, row, col, colspan=1):
-            tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(5, 0), padx=5)
+            tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(8, 0), padx=5)
             ent = tk.Entry(parent, font=("Segoe UI", 10), bg=self.bg_card, relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=4, padx=5)
+            # ipady=5 define a altura interna do Entry
+            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=5, padx=5)
             aplicar_estilo_foco(ent)
             return ent
 
+        # --- Título ---
+        tk.Label(main_frame, text="Ficha Cadastro Despesa", bg=self.bg_fundo, 
+         fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(
+             row=0, column=0, columnspan=3, pady=(0, 10), sticky="n")
+        
         # --- BUSCA RÁPIDA (Conforme Cadastro Produtos) ---
         tk.Label(main_frame, text="🔍 BUSCA RÁPIDA", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w", padx=5)
         self.ent_busca_interna = tk.Entry(main_frame, font=("Segoe UI", 9), bg=self.bg_card, relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
@@ -105,22 +127,22 @@ class JanelaCadastroDespesas(tk.Toplevel):
         tk.Label(main_frame, text="STATUS*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9, "bold")).grid(row=7, column=2, sticky="w", padx=5)
         self.cb_status = ttk.Combobox(main_frame, values=self.list_status, state="readonly", font=("Segoe UI", 9))
         self.cb_status.set("Pendente")
-        self.cb_status.grid(row=8, column=2, sticky="ew", padx=5)
+        self.cb_status.grid(row=8, column=2, sticky="ew", padx=5, ipady=3)
 
         # Linha de Configurações 
         tk.Label(main_frame, text="CATEGORIA*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9, "bold")).grid(row=9, column=0, sticky="w", padx=5)
         self.cb_cat = ttk.Combobox(main_frame, values=self.list_categorias, state="readonly", font=("Segoe UI", 9))
-        self.cb_cat.grid(row=10, column=0, sticky="ew", padx=5)
+        self.cb_cat.grid(row=10, column=0, sticky="ew", padx=5, ipady=3)
 
         tk.Label(main_frame, text="FORMA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9, "bold")).grid(row=9, column=1, sticky="w", padx=5)
         self.cb_forma = ttk.Combobox(main_frame, values=self.list_formas, state="readonly", font=("Segoe UI", 9))
         self.cb_forma.set("Dinheiro")
-        self.cb_forma.grid(row=10, column=1, sticky="ew", padx=5)
+        self.cb_forma.grid(row=10, column=1, sticky="ew", padx=5, ipady=3)
 
         tk.Label(main_frame, text="RECORRÊNCIA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9, "bold")).grid(row=9, column=2, sticky="w", padx=5)
         self.cb_recorrencia = ttk.Combobox(main_frame, values=self.list_recorrencia, state="readonly", font=("Segoe UI", 9))
         self.cb_recorrencia.set("Não Recorrente")
-        self.cb_recorrencia.grid(row=10, column=2, sticky="ew", padx=5)
+        self.cb_recorrencia.grid(row=10, column=2, sticky="ew", padx=5, ipady=3)
         self.cb_recorrencia.bind("<<ComboboxSelected>>", self.toggle_parcelas)
 
         # Sub-menu Parcelas (CORREÇÃO DA FUNÇÃO)
@@ -241,3 +263,4 @@ if __name__ == "__main__":
     root.withdraw()
     JanelaCadastroDespesas(root)
     root.mainloop()
+
