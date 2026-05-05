@@ -1,15 +1,15 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
+from datetime import datetime
 import database 
-from datetime import datetime, timedelta
 
 class JanelaCadastroDespesas(tk.Toplevel):
     def __init__(self, master, dados_despesa=None):
         super().__init__(master)
-
-       # --- Paleta de cores ---
+        
+        # --- Paleta de cores ---
         self.bg_fundo       = "#F1F5F9"
-        self.bg_card        = "#FFFFFF"
+        self.bg_card        = "#FFFFFF"    
         self.cor_borda      = "#8BA2BD"
         self.cor_texto      = "#0B1933"
         self.cor_lbl        = "#020C18"
@@ -20,13 +20,12 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.cor_hover_btn  = "#6F7CA0" 
         self.cor_hover_field = "#484AD6" 
 
-        # --- Configurações da Janela ---
+        # --- Configurações da janela ---
         self.title("Alê Sapatilhas - Gestão Financeira")
         self.geometry("600x820")
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
         
-        # Dual Mode: Se houver dados_despesa, entra em modo Edição
         self.despesa_id = dados_despesa[0] if dados_despesa else None
         
         self.list_formas = ["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX", "Boleto", "Outros"]
@@ -45,21 +44,9 @@ class JanelaCadastroDespesas(tk.Toplevel):
     def setup_styles(self):
         style = ttk.Style()
         style.theme_use('clam')
-        
-        # Configuração para igualar a altura do Combobox ao Entry com ipady=5
-        style.configure("TCombobox", 
-                        fieldbackground=self.bg_card, 
-                        background=self.bg_card, 
-                        bordercolor=self.cor_borda,
-                        lightcolor=self.cor_borda,
-                        darkcolor=self.cor_borda,
-                        arrowsize=15)
-        
-        # Ajuste específico para a altura do campo de texto do Combobox
-        style.layout("TCombobox", style.layout("TCombobox"))
-        
-        style.configure("Hist.Treeview", background="#F8FAFC", rowheight=25, font=("Segoe UI", 9))
-        style.configure("Hist.Treeview.Heading", font=("Segoe UI", 8, "bold"))
+        style.configure("TCombobox", fieldbackground=self.bg_card, background=self.bg_card, 
+                        arrowcolor=self.cor_btn_acao, bordercolor=self.cor_borda)
+        style.configure("Busca.Treeview", background="#F8FAFC", rowheight=22, font=("Segoe UI", 9))
 
     def formatar_data_para_bd(self, data_str):
         try:
@@ -67,14 +54,12 @@ class JanelaCadastroDespesas(tk.Toplevel):
         except: return None
 
     def criar_widgets(self):
-        # Frame centralizador para garantir que o conteúdo não fique "colado" nas bordas
-        self.container = tk.Frame(self, bg=self.bg_fundo)
-        self.container.place(relx=0.5, rely=0.48, anchor="center")
+        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=10)
+        main_frame.pack(fill="both", expand=True)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
 
-        main_frame = tk.Frame(self.container, bg=self.bg_fundo, padx=10, pady=10)
-        main_frame.pack()
-
-        # --- Helpers de Estilo ---
+        # --- Helpers de estilo (Hover e Input) ---
         def aplicar_estilo_foco(ent):
             def on_enter(e):
                 if self.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
@@ -87,19 +72,19 @@ class JanelaCadastroDespesas(tk.Toplevel):
             ent.bind("<FocusIn>", on_focus_in)
             ent.bind("<FocusOut>", on_focus_out)
 
-        def criar_campo(parent, texto, row, col, colspan=1):
-            tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(8, 0), padx=5)
-            ent = tk.Entry(parent, font=("Segoe UI", 10), bg=self.bg_card, relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-            # ipady=5 define a altura interna do Entry
-            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=5, padx=5)
+        def criar_campo(parent, texto, row, col=0, colspan=2):
+            tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, 
+                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(3, 0))
+            ent = tk.Entry(parent, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto,
+                            relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
+            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=3, padx=(0, 5) if colspan==1 else 0)
             aplicar_estilo_foco(ent)
             return ent
 
         # --- Título ---
         tk.Label(main_frame, text="Ficha Cadastro Despesa", bg=self.bg_fundo, 
-         fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(
-             row=0, column=0, columnspan=3, pady=(0, 10), sticky="n")
-        
+                 fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=3, pady=(0, 10))
+
         # --- BUSCA RÁPIDA (Conforme Cadastro Produtos) ---
         tk.Label(main_frame, text="🔍 BUSCA RÁPIDA", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w", padx=5)
         self.ent_busca_interna = tk.Entry(main_frame, font=("Segoe UI", 9), bg=self.bg_card, relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
@@ -114,7 +99,6 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.tree_busca.bind("<<TreeviewSelect>>", self.selecionar_da_busca)
 
         # --- FORMULÁRIO ---
-        # Fornecedor em cima, Descrição em baixo conforme solicitado
         self.ent_entidade = criar_campo(main_frame, "FORNECEDOR / ENTIDADE*", 3, 0, colspan=3)
         self.ent_desc = criar_campo(main_frame, "DESCRIÇÃO DA DESPESA*", 5, 0, colspan=3)
 
@@ -178,7 +162,6 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.btn_salvar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_btn_acao))
         self.btn_cancelar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_cancelar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_btn_sair))
-
 
         self.atualizar_tree_busca()
 
