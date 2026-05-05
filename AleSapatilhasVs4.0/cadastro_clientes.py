@@ -190,6 +190,5 @@ class JanelaCadastroClientes(tk.Toplevel):
 if __name__ == "__main__":
     root = tk.Tk()
     root.withdraw()
-    # Para teste: JanelaCadastroClientes(root, (1, "Nome Teste", "123", "999", "", "", "37", "", "", "", "", "", "100.00", "", "Vip"))
     JanelaCadastroClientes(root)
     root.mainloop()

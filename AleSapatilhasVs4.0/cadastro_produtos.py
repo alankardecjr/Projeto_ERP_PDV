@@ -25,8 +25,6 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
 
-        # REMOVIDO: self.root.configure e self.root.resizable (causadores do erro)
-
         self.produto_id = dados_produto[0] if dados_produto else None
         
         self.list_categorias = ["Sapatilhas", "Rasteiras", "Salto Fino", "Salto Block", "Mules", "Tênis", "Botas", "Biquinis", "Roupas"]     
@@ -56,6 +54,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
 
+        # --- Helpers de estilo (Hover e Input) ---
         def aplicar_estilo_foco(ent):
             def on_enter(e):
                 if self.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
@@ -141,7 +140,8 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.opt_status.config(bg=self.bg_fundo, fg=self.cor_texto, relief="flat", highlightthickness=1, 
                                 highlightbackground=self.cor_borda, font=("Segoe UI", 9), cursor="hand2")
         self.opt_status.grid(row=5, column=1, sticky="ew", pady=(1, 0))
-
+        
+        # --- BOTÕES (Dual Mode e Hover) ---
         texto_botao = "ATUALIZAR PRODUTO" if self.produto_id else "SALVAR PRODUTO"
         cor_base_acao = self.cor_hover_field if self.produto_id else self.cor_btn_acao
 

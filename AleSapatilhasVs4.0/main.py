@@ -6,7 +6,8 @@ class SistemaAleSapatilhas:
     def __init__(self, root):
         self.root = root
         self.root.title("Alê Sapatilhas - Gestão Integrada v4.0")
-        # 1. Captura a largura e altura total do monitor
+        
+        # --- Captura a largura e altura total do monitor ---
         largura = self.root.winfo_screenwidth()
         altura = self.root.winfo_screenheight()
         self.root.geometry(f"{largura}x{altura-70}+0+0") 

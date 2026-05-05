@@ -1,20 +1,21 @@
 import sqlite3
 from datetime import datetime, timedelta
 
+# --- Nome do arquivo do banco de dados ---
 DB_NAME = "AleSapatilhasVs4.0db"
 
 def conectar():
-    """Estabelece conexão com o banco de dados e ativa restrições de chave estrangeira."""
+    # --- Estabelece a conexão com o banco de dados sqlite3 e habilita o suporte a chaves estrangeiras para garantir a integridade referencial ---
     conn = sqlite3.connect(DB_NAME)
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
 def criar_tabelas():
-    """Cria a estrutura de tabelas e automações (triggers)."""
+    # --- Executa a criação de todas as tabelas necessárias, define restrições de dados (check) e configura gatilhos automáticos para controle de estoque ---
     with conectar() as conn:
         cursor = conn.cursor()
         
-        # 1. TABELA DE PRODUTOS
+        # --- Tabela de produtos: armazena informações técnicas, custos, preços de venda e o status atual do inventário ---
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,7 +33,7 @@ def criar_tabelas():
             ultima_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
 
-        # 2. TABELA DE CLIENTES
+        # --- Tabela de clientes: registra dados de contato, localização, preferências de tamanho e limites de crédito para vendas a prazo ---
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,7 +53,7 @@ def criar_tabelas():
             status_cliente TEXT DEFAULT 'Ativo' CHECK(status_cliente IN ('Vip', 'Ativo', 'Inativo', 'Bloqueado'))
         )""")
 
-        # 3. TABELA DE VENDAS (HEADER)
+        # --- Tabela de vendas: cabeçalho da transação que armazena totais, descontos, formas de pagamento e o vínculo com o cliente ---
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS vendas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +69,7 @@ def criar_tabelas():
             FOREIGN KEY (cliente_id) REFERENCES clientes (id)
         )""")
 
-        # 4. ITENS DA VENDA (DETALHE)
+        # --- Tabela de itens da venda: detalhamento de quais produtos compõem cada venda, registrando o preço praticado no momento da transação ---
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS itens_venda (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,7 +82,7 @@ def criar_tabelas():
             FOREIGN KEY (produto_id) REFERENCES produtos (id)
         )""")
 
-        # 5. FINANCEIRO
+        # --- Tabela financeiro: centraliza contas a pagar e a receber, permitindo o controle de parcelamento e fluxo de caixa ---
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS financeiro (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,7 +101,7 @@ def criar_tabelas():
             FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE
         )""")
         
-        # TRIGGER: Atualiza status baseado na quantidade
+        # --- Gatilho de estoque: altera automaticamente o status do produto para 'esgotado' quando a quantidade atinge zero ou menos ---
         cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS trg_estoque_esgotado
         AFTER UPDATE OF quantidade ON produtos
@@ -112,9 +113,9 @@ def criar_tabelas():
         
         conn.commit()
 
-# --- FUNÇÕES DE PRODUTOS ---
-
+# --- Funções de produtos ---
 def cadastrar_produto(sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor):
+    # --- Insere um novo produto no catálogo e retorna verdadeiro se o sku for único, caso contrário retorna falso ---
     try:
         with conectar() as conn:
             cursor = conn.cursor()
@@ -127,12 +128,14 @@ def cadastrar_produto(sku, produto, cor, tamanho, precocusto, precovenda, quanti
         return False
 
 def exibir_produtos():
+    # --- Recupera a lista completa de produtos cadastrados com seus principais detalhes técnicos e comerciais ---
     with conectar() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id, sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item FROM produtos")
         return cursor.fetchall()
 
 def atualizar_produto(produto_id, **kwargs):
+    # --- Atualiza campos específicos de um produto dinamicamente e registra o horário da última modificação ---
     with conectar() as conn:
         cursor = conn.cursor()
         campos = ", ".join(f"{k} = ?" for k in kwargs.keys())
@@ -140,9 +143,9 @@ def atualizar_produto(produto_id, **kwargs):
         cursor.execute(f"UPDATE produtos SET {campos}, ultima_atualizacao = CURRENT_TIMESTAMP WHERE id = ?", valores)
         conn.commit()
 
-# --- FUNÇÕES DE CLIENTES ---
-
+# --- Funções de clientes ---
 def cadastrar_cliente(nome, cpf, tel, email, niver, tam, endereco, bairro, cidade, cep, obs, limite=0):
+    # --- Registra um novo cliente no sistema validando a unicidade do cpf e definindo o limite inicial de crédito ---
     try:
         with conectar() as conn:
             cursor = conn.cursor()
@@ -155,13 +158,14 @@ def cadastrar_cliente(nome, cpf, tel, email, niver, tam, endereco, bairro, cidad
         return False
 
 def exibir_clientes():
+    # --- Lista todos os clientes cadastrados trazendo informações de contato, status e histórico de cadastro ---
     with conectar() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito, data_cadastro, status_cliente FROM clientes")
         return cursor.fetchall()
 
 def atualizar_cliente(cliente_id, **kwargs):
-    """Atualiza informações do cliente de forma flexível."""
+    # --- Modifica os dados de um cliente existente de forma flexível utilizando argumentos nomeados ---
     with conectar() as conn:
         cursor = conn.cursor()
         campos = ", ".join(f"{k} = ?" for k in kwargs.keys())
@@ -169,38 +173,35 @@ def atualizar_cliente(cliente_id, **kwargs):
         cursor.execute(f"UPDATE clientes SET {campos} WHERE id = ?", valores)
         conn.commit()
 
-# --- MOVIMENTAÇÕES E VENDAS ---
-
+# --- Movimentações e vendas ---
 def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, desconto=0):
-    """
-    lista_produtos: [{'id': int, 'qtd': int, 'preco': float}]
-    """
+    # --- Processa uma venda completa: valida o estoque disponível, calcula totais, baixa o inventário e gera as parcelas no financeiro dentro de uma transação segura ---
     with conectar() as conn:
         cursor = conn.cursor()
         try:
-            # 1. Validar Estoque
+            # --- Validação de estoque: verifica se cada item da lista possui saldo suficiente antes de prosseguir ---
             for item in lista_produtos:
                 cursor.execute("SELECT quantidade, produto FROM produtos WHERE id = ?", (item['id'],))
                 res = cursor.fetchone()
                 if not res or res[0] < item['qtd']:
                     return False, f"Estoque insuficiente: {res[1] if res else 'Produto não encontrado'}"
 
-            # 2. Calcular Totais
+            # --- Cálculos financeiros: define o montante bruto e aplica o desconto para chegar ao valor líquido ---
             total_bruto = sum(p['qtd'] * p['preco'] for p in lista_produtos)
             total_liquido = round(total_bruto - desconto, 2)
             
-            # 3. Inserir Header da Venda
+            # --- Registro do cabeçalho: insere os dados gerais da venda para gerar o id de referência ---
             cursor.execute("""INSERT INTO vendas (cliente_id, valor_bruto, desconto, valor_total, forma_pagamento, qtd_parcelas)
                               VALUES (?, ?, ?, ?, ?, ?)""", (cliente_id, total_bruto, desconto, total_liquido, forma_pgto, parcelas))
             venda_id = cursor.lastrowid
 
-            # 4. Baixar Estoque e Inserir Itens
+            # --- Processamento de itens e estoque: registra cada produto vendido e subtrai a quantidade do inventário ---
             for p in lista_produtos:
                 cursor.execute("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?", (p['qtd'], p['id']))
                 cursor.execute("INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal) VALUES (?, ?, ?, ?, ?)",
                                (venda_id, p['id'], p['qtd'], p['preco'], p['qtd'] * p['preco']))
 
-            # 5. Gerar Financeiro
+            # --- Geração de parcelas financeiras: cria registros de receita com vencimentos mensais baseados no número de parcelas ---
             valor_parc = round(total_liquido / parcelas, 2)
             for i in range(parcelas):
                 venc = (datetime.now() + timedelta(days=30*i)).strftime("%Y-%m-%d")
@@ -215,9 +216,9 @@ def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, de
             conn.rollback()
             return False, f"Erro ao processar venda: {str(e)}"
 
-# --- FINANCEIRO E RELATÓRIOS ---
-
+# --- Financeiro e relatórios ---
 def quitar_titulo_financeiro(financeiro_id, forma_pgto):
+    # --- Registra o pagamento de uma conta a pagar ou receber alterando seu status e salvando a data da liquidação ---
     hoje = datetime.now().strftime("%Y-%m-%d")
     with conectar() as conn:
         cursor = conn.cursor()
@@ -225,6 +226,7 @@ def quitar_titulo_financeiro(financeiro_id, forma_pgto):
                        (hoje, forma_pgto, financeiro_id))
 
 def lancar_despesa(descricao, valor, categoria, vencimento, parcelas=1):
+    # --- Cria lançamentos de saída financeira no sistema, permitindo o rateio de valores em várias parcelas mensais ---
     with conectar() as conn:
         cursor = conn.cursor()
         valor_parc = round(valor / parcelas, 2)
@@ -236,6 +238,7 @@ def lancar_despesa(descricao, valor, categoria, vencimento, parcelas=1):
             """, (descricao, valor_parc, i+1, parcelas, data_venc, categoria))
 
 def dashboard_resumo():
+    # --- Gera um panorama rápido contendo alertas de estoque baixo e o montante total de receitas ainda não recebidas ---
     with conectar() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT produto, quantidade FROM produtos WHERE quantidade < 3 AND status_item != 'Indisponível'")
@@ -247,6 +250,7 @@ def dashboard_resumo():
         return {"alertas_estoque": alertas, "total_a_receber": res if res else 0.0}
 
 def relatorio_vendas_geral():
+    # --- Realiza um join entre vendas e clientes para gerar um extrato histórico de todas as transações realizadas ---
     with conectar() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -258,7 +262,7 @@ def relatorio_vendas_geral():
         return cursor.fetchall()
     
 def fluxo_caixa_mensal(mes, ano):
-    """Relatório Profissional: Comparativo Realizado vs Pendente."""
+    # --- Consolida os valores financeiros de um mês específico, separando o que já foi liquidado do que ainda está previsto ---
     with conectar() as conn:
         cursor = conn.cursor()
         filtro = f"{ano}-{str(mes).zfill(2)}%"       
@@ -275,7 +279,7 @@ def fluxo_caixa_mensal(mes, ano):
         
         return cursor.fetchone()
 
-
+# --- Execução principal ---
 if __name__ == "__main__":
     criar_tabelas()
     print("✓ Banco de Dados Ale Sapatilhas Vs4.0 Refatorado e Ativo.")
