@@ -25,6 +25,10 @@ class JanelaCadastroClientes(tk.Toplevel):
         self.title("Alê Sapatilhas - Gestão de Clientes")
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
+
+        # MANTER EM PRIMEIRO PLANO
+        self.attributes("-topmost", True)
+        
         ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=720)
 
         self.cliente_id = dados_cliente[0] if dados_cliente else None
