@@ -27,6 +27,7 @@ class SistemaAleSapatilhas:
 
         self.root.configure(bg=self.bg_fundo)
         self.modo_atual = "clientes" 
+        self.botoes_menu = {}  # Dicionário para armazenar referências dos botões do menu
         
         self.setup_ui()
         self.exibir_clientes() # Inicia visualizando clientes
@@ -47,29 +48,33 @@ class SistemaAleSapatilhas:
         }
 
         botoes = [
-            ("➕ LANÇAR VENDA", self.abrir_cadastro_vendas),
-            ("📑 LISTAR VENDAS", self.exibir_vendas),
-            ("💸 LANÇAR FINANCEIRO", self.abrir_cadastro_despesas), 
-            ("📉 FLUXO DE CAIXA", self.exibir_financeiro),
-            ("👤 CADASTRAR CLIENTE", self.abrir_cadastro_cliente),
-            ("👥 LISTAR CLIENTES", self.exibir_clientes),
-            ("📦 CADASTRAR PRODUTO", self.abrir_cadastro_produto),
-            ("👠 LISTAR PRODUTOS", self.exibir_produtos),
-            ("📊 DASHBOARD", self.exibir_dashboard),
-            ("", None), 
-            ("🚪 SAIR", self.confirmar_saida)
+            ("➕ LANÇAR VENDA", self.abrir_cadastro_vendas, "vendas"),
+            ("📑 LISTAR VENDAS", self.exibir_vendas, "vendas"),
+            ("💸 LANÇAR FINANCEIRO", self.abrir_cadastro_despesas, "financeiro"), 
+            ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
+            ("👤 CADASTRAR CLIENTE", self.abrir_cadastro_cliente, "clientes"),
+            ("👥 LISTAR CLIENTES", self.exibir_clientes, "clientes"),
+            ("📦 CADASTRAR PRODUTO", self.abrir_cadastro_produto, "produtos"),
+            ("👠 LISTAR PRODUTOS", self.exibir_produtos, "produtos"),
+            ("📊 DASHBOARD", self.exibir_dashboard, None),
+            ("", None, None), 
+            ("🚪 SAIR", self.confirmar_saida, None)
         ]
 
-        for texto, comando in botoes:
+        for texto, comando, modo in botoes:
             if texto == "":
                 tk.Label(self.sidebar, bg=self.cor_btn_sair, pady=10).pack()
                 continue
 
             # --- Criando botões com estilo e hover ---
-            btn = tk.Button(self.sidebar, text=texto, command=comando, **btn_estilo)
+            btn = tk.Button(self.sidebar, text=texto, command=lambda c=comando, m=modo: self.executar_comando_menu(c, m), **btn_estilo)
             btn.pack(fill="x", pady=2)
             btn.bind("<Enter>", lambda e, b=btn: b.config(bg=self.cor_hover_btn))
             btn.bind("<Leave>", lambda e, b=btn: b.config(bg=self.cor_btn_menu))
+            
+            # Armazenar referência se tem modo associado
+            if modo:
+                self.botoes_menu[modo] = btn
 
         # --- Container Principal para exibir conteúdo dinâmico ---
         self.container = tk.Frame(self.root, bg=self.bg_fundo, padx=20, pady=20)
@@ -101,13 +106,49 @@ class SistemaAleSapatilhas:
         self.tree = ttk.Treeview(self.tree_frame, show="headings", selectmode="browse")
         self.tree.pack(side="left", fill="both", expand=True)
 
-        scrollbar = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
-        scrollbar.pack(side="right", fill="y")
-        self.tree.configure(yscrollcommand=scrollbar.set)
+        # Barras de rolagem vertical e horizontal
+        scrollbar_v = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
+        scrollbar_v.pack(side="right", fill="y")
+        scrollbar_h = ttk.Scrollbar(self.tree_frame, orient="horizontal", command=self.tree.xview)
+        scrollbar_h.pack(side="bottom", fill="x")
+        self.tree.configure(yscrollcommand=scrollbar_v.set, xscrollcommand=scrollbar_h.set)
 
         # --- Bindings de interação ---
         self.tree.bind("<Double-1>", lambda e: self.editar_selecionado())
         self.tree.bind("<Button-3>", self.mostrar_menu_contexto)
+        self.tree.bind("<Motion>", self.focus_linha_mouse)  # Focus ao passar mouse
+        
+        # Focus no campo de busca
+        self.ent_busca.bind("<Enter>", lambda e: self.ent_busca.focus())
+        
+        # Dicionário para armazenar referências dos botões do menu
+        self.botoes_menu = {}
+        
+        # Atualizar destaque do menu
+        self.atualizar_destaque_menu()
+
+    def executar_comando_menu(self, comando, modo):
+        """Executa comando do menu e atualiza destaque"""
+        if comando:
+            comando()
+        if modo:
+            self.modo_atual = modo
+            self.atualizar_destaque_menu()
+
+    def atualizar_destaque_menu(self):
+        """Atualiza destaque visual do botão do menu ativo"""
+        for modo, btn in self.botoes_menu.items():
+            if modo == self.modo_atual:
+                btn.config(bg=self.cor_destaque, fg="white")
+            else:
+                btn.config(bg=self.cor_btn_menu, fg="white")
+
+    def focus_linha_mouse(self, event):
+        """Define foco na linha onde o mouse está passando"""
+        item = self.tree.identify_row(event.y)
+        if item:
+            self.tree.focus(item)
+            self.tree.selection_set(item)
         
     # --- Função para preparar colunas da Treeview de acordo com o modo atual ---
     def preparar_colunas(self, colunas):
@@ -245,6 +286,7 @@ class SistemaAleSapatilhas:
                 
             elif self.modo_atual == "vendas":
                 menu.add_command(label="Editar Venda", command=self.editar_venda)
+                menu.add_command(label="Visualizar Venda", command=self.visualizar_venda)
                 menu.add_separator()
                 menu.add_command(label="Sair", command=lambda: None)
                 
@@ -391,7 +433,26 @@ class SistemaAleSapatilhas:
             self.exibir_financeiro()
 
     def editar_venda(self):
-        messagebox.showinfo("Editar Venda", "Funcionalidade de edição de vendas será implementada em breve!")
+        item = self.tree.selection()
+        if not item: return
+        id_banco = self.tree.item(item, "values")[0]
+        
+        from cadastro_vendas import JanelaCadastroVendas
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM vendas WHERE id=?", (id_banco,))
+            dados = cursor.fetchone()
+            if dados:
+                JanelaCadastroVendas(self.root, dados_venda=dados)
+                self.exibir_vendas()
+
+    def visualizar_venda(self):
+        item = self.tree.selection()
+        if not item: return
+        id_banco = self.tree.item(item, "values")[0]
+        
+        from cadastro_despesas import VisualizarRecibo
+        VisualizarRecibo(self.root, id_venda=id_banco)
 
     def confirmar_saida(self):
         if messagebox.askyesno("Sair", "Deseja encerrar o sistema Ale Sapatilhas?"):

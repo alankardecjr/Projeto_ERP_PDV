@@ -1,8 +1,9 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, filedialog
 from datetime import datetime
 import database 
 import ui_utils
+import os
 
 class JanelaCadastroProdutos(tk.Toplevel):
     def __init__(self, master, dados_produto=None):
@@ -28,7 +29,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.resizable(False, False)
         
         # --- Aplicar dimensões padrão (600px largura, altura aumentada) ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=950)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=1000)
 
         self.produto_id = dados_produto[0] if dados_produto else None
         
@@ -170,8 +171,8 @@ class JanelaCadastroProdutos(tk.Toplevel):
                  font=("Segoe UI", 8, "bold")).grid(row=4, column=1, sticky="w", pady=(3, 0))
         self.var_status = tk.StringVar(value="Disponível")
         self.opt_status = tk.OptionMenu(frame_grade, self.var_status, *self.list_status)
-        self.opt_status.config(bg=self.bg_fundo, fg=self.cor_texto, relief="flat", highlightthickness=1, 
-                                highlightbackground=self.cor_borda, font=("Segoe UI", 9), cursor="hand2")
+        self.opt_status.config(bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, 
+                                highlightbackground=self.cor_borda, font=("Segoe UI", 10), cursor="hand2")
         self.opt_status.grid(row=5, column=1, sticky="ew", pady=(1, 0))
 
         # --- ESPAÇO PARA FOTO (lado direito) ---
@@ -215,6 +216,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.menu_contexto = tk.Menu(self, tearoff=0)
         self.menu_contexto.add_command(label="Editar", command=self.editar_produto_menu)
         self.menu_contexto.add_command(label="Indisponibilizar", command=self.indisponibilizar_produto_menu)
+        self.menu_contexto.add_command(label="Promocional", command=self.promocional_produto_menu)
         self.menu_contexto.add_command(label="Restaurar", command=self.restaurar_produto_menu)
         self.menu_contexto.add_separator()
         self.menu_contexto.add_command(label="Sair", command=self.destroy)
@@ -330,8 +332,39 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.ent_sku.config(state="readonly")
 
     def selecionar_foto(self, event):
-        """Placeholder para seleção de foto do produto"""
-        messagebox.showinfo("Foto do Produto", "Funcionalidade de foto será implementada em breve!")
+        """Selecionar foto da galeria e copiar para pasta images"""
+        # Abrir diálogo para selecionar arquivo
+        caminho_origem = filedialog.askopenfilename(
+            title="Selecionar Foto do Produto",
+            filetypes=[("Imagens", "*.jpg *.jpeg *.png *.gif *.bmp"), ("Todos os arquivos", "*.*")]
+        )
+        
+        if caminho_origem:
+            try:
+                # Criar pasta images se não existir
+                os.makedirs("images", exist_ok=True)
+                
+                # Gerar nome único para a foto
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nome_arquivo = f"produto_{timestamp}.jpg"
+                caminho_destino = os.path.join("images", nome_arquivo)
+                
+                # Copiar arquivo para pasta images
+                import shutil
+                shutil.copy2(caminho_origem, caminho_destino)
+                
+                # Atualizar campo foto (se existir)
+                if hasattr(self, 'caminho_foto'):
+                    self.caminho_foto = caminho_destino
+                
+                # Atualizar label para mostrar preview
+                self.lbl_foto.config(text=f"📷\n\nFoto selecionada:\n{nome_arquivo}", fg=self.cor_destaque)
+                
+                messagebox.showinfo("Sucesso", f"Foto '{nome_arquivo}' adicionada com sucesso!")
+                
+            except Exception as e:
+                messagebox.showerror("Erro", f"Falha ao copiar foto: {str(e)}")
 
     def editar_produto_duplo_clique(self, event):
         """Editar produto com duplo clique"""
@@ -372,6 +405,22 @@ class JanelaCadastroProdutos(tk.Toplevel):
                     self.master.exibir_produtos()
             except Exception as e:
                 messagebox.showerror("Erro", f"Erro ao indisponibilizar produto: {str(e)}")
+
+    def promocional_produto_menu(self):
+        """Marcar produto como promocional via menu de contexto"""
+        selecao = self.tree_busca.selection()
+        if not selecao: return
+        id_prod = self.tree_busca.item(selecao)["values"][0]
+        
+        if messagebox.askyesno("Confirmar", "Deseja marcar este produto como promocional?"):
+            try:
+                database.atualizar_produto(id_prod, status_item="Promocional")
+                messagebox.showinfo("Sucesso", "Produto marcado como promocional!")
+                self.atualizar_tree_busca()
+                if hasattr(self.master, "exibir_produtos"):
+                    self.master.exibir_produtos()
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao marcar produto como promocional: {str(e)}")
 
     def restaurar_produto_menu(self):
         """Restaurar produto via menu de contexto"""

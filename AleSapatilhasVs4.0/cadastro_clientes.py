@@ -40,7 +40,7 @@ class JanelaCadastroClientes(tk.Toplevel):
         self.grab_set()
 
     def criar_widgets(self):
-        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=10)
+        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=21, pady=10)
         main_frame.pack(fill="both", expand=True)
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
@@ -104,28 +104,33 @@ class JanelaCadastroClientes(tk.Toplevel):
         self.texto_btn = "ATUALIZAR CADASTRO" if self.cliente_id else "SALVAR CADASTRO"
         self.cor_base_acao = self.cor_hover_field if self.cliente_id else self.cor_btn_acao
 
-        self.btn_salvar = tk.Button(main_frame, text=self.texto_btn, bg=self.cor_base_acao, fg="white", 
+        # Frame para botões superiores
+        frame_botoes_superior = tk.Frame(main_frame, bg=self.bg_fundo)
+        frame_botoes_superior.grid(row=19, column=0, columnspan=2, pady=(10, 0), sticky="ew")
+        
+        self.btn_salvar = tk.Button(frame_botoes_superior, text=self.texto_btn, bg=self.cor_base_acao, fg="white", 
                                     font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                     command=self.salvar_dados)
-        self.btn_salvar.grid(row=19, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
+        self.btn_salvar.pack(side="left", padx=(0, 10), ipady=5, expand=True)
         
-        # --- Botão Gerar Venda (apenas se cliente já cadastrado) ---
-        if self.cliente_id:
-            self.btn_gerar_venda = tk.Button(main_frame, text="🛒 GERAR VENDA", bg=self.cor_destaque, fg="white", 
-                                             font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
-                                             command=self.gerar_venda)
-            self.btn_gerar_venda.grid(row=20, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
-            self.btn_gerar_venda.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
-            self.btn_gerar_venda.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_destaque))
+        # --- Botão Gerar Venda (sempre disponível) ---
+        self.btn_gerar_venda = tk.Button(frame_botoes_superior, text="🛒 GERAR VENDA", bg=self.cor_destaque, fg="white", 
+                                         font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
+                                         command=self.gerar_venda)
+        self.btn_gerar_venda.pack(side="right", ipady=5, expand=True)
         
+        # Botão Cancelar embaixo
         self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_sair, fg="white", 
                                       font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                       command=self.destroy)
-        self.btn_cancelar.grid(row=21 if self.cliente_id else 20, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
+        self.btn_cancelar.grid(row=20, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=5)
 
         # --- Hovers ---
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_salvar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_base_acao))
+        
+        self.btn_gerar_venda.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
+        self.btn_gerar_venda.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_destaque))
         
         self.btn_cancelar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_cancelar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_btn_sair))
@@ -209,13 +214,60 @@ class JanelaCadastroClientes(tk.Toplevel):
         messagebox.showinfo("Bloquear", "Função será implementada no menu principal")
 
     def gerar_venda(self):
-        """Abre o PDV com o cliente pré-selecionado"""
-        from cadastro_vendas import JanelaCadastroVendas
-        # Fecha a janela atual
-        self.destroy()
-        # Abre o PDV com cliente selecionado
-        cliente_dados = (self.cliente_id, self.ent_nome.get(), self.ent_tel.get())
-        JanelaCadastroVendas(self.master, cliente_selecionado=cliente_dados)
+        """Salva o cadastro do cliente e abre o PDV com cliente pré-selecionado"""
+        # Primeiro salva o cadastro se houver dados
+        if self.ent_nome.get().strip():
+            try:
+                # Salva ou atualiza o cliente
+                d = {
+                    "nome": self.ent_nome.get().strip(),
+                    "cpf": self.ent_cpf.get().strip(),
+                    "tel": self.ent_tel.get().strip(),
+                    "email": self.ent_email.get().strip(),
+                    "niver": self.ent_niver.get().strip(),
+                    "tam": self.ent_tam.get().strip() or 0,
+                    "endereco": self.ent_logra.get().strip(),
+                    "bairro": self.ent_bairro.get().strip(),
+                    "cidade": self.ent_cidade.get().strip(),
+                    "cep": self.ent_cep.get().strip(),
+                    "obs": self.ent_obs.get().strip(),
+                    "limite": self.ent_limite.get().strip() or 0,
+                    "status": self.var_status.get()
+                }
+                
+                if not d["nome"] or not d["cpf"] or not d["tel"]:
+                    messagebox.showwarning("Atenção", "Preencha pelo menos Nome, CPF e Telefone para gerar venda.")
+                    return
+
+                if self.cliente_id:
+                    database.atualizar_cliente(
+                        self.cliente_id, 
+                        nome=d["nome"], cpf=d["cpf"], telefone=d["tel"], email=d["email"],
+                        aniversario=d["niver"], tamanho_calcado=d["tam"], 
+                        endereco_completo=d["endereco"], bairro=d["bairro"],
+                        cidade=d["cidade"], cep=d["cep"], observacao=d["obs"],
+                        limite_credito=d["limite"], status_cliente=d["status"]
+                    )
+                    cliente_id_atual = self.cliente_id
+                else:
+                    cliente_id_atual = database.cadastrar_cliente(
+                        d["nome"], d["cpf"], d["tel"], d["email"],
+                        d["niver"], d["tam"], d["endereco"], d["bairro"],
+                        d["cidade"], d["cep"], d["obs"], d["limite"]
+                    )
+                
+                # Fecha a janela atual
+                self.destroy()
+                
+                # Abre o PDV com cliente selecionado
+                from cadastro_vendas import JanelaCadastroVendas
+                cliente_dados = (cliente_id_atual, d["nome"], d["tel"])
+                JanelaCadastroVendas(self.master, cliente_selecionado=cliente_dados)
+                
+            except Exception as e:
+                messagebox.showerror("Erro", f"Falha ao salvar cliente: {e}")
+        else:
+            messagebox.showwarning("Atenção", "Preencha pelo menos o nome do cliente.")
 
     def restaurar_cliente_menu(self):
         """Restaurar cliente via menu de contexto (placeholder)"""

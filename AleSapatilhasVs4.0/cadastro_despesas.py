@@ -27,8 +27,8 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
         
-        # --- Aplicar dimensões padrão (600px largura, altura aumentada) ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=900)
+        # --- Aplicar dimensões padrão (600px largura, altura reduzida) ---
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=700)
         
         self.despesa_id = dados_despesa[0] if dados_despesa else None
         
@@ -78,10 +78,10 @@ class JanelaCadastroDespesas(tk.Toplevel):
 
         def criar_campo(parent, texto, row, col=0, colspan=2):
             tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, 
-                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(3, 0))
-            ent = tk.Entry(parent, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto,
+                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(2, 0), padx=5)
+            ent = tk.Entry(parent, font=("Segoe UI", 9), bg=self.bg_card, fg=self.cor_texto,
                             relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=3, padx=(0, 5) if colspan==1 else 0)
+            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=2, padx=5)
             aplicar_estilo_foco(ent)
             return ent
 
@@ -95,11 +95,11 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.ent_busca_interna.grid(row=2, column=0, columnspan=3, sticky="ew", padx=5, ipady=3, pady=5)
         self.ent_busca_interna.bind("<KeyRelease>", self.filtrar_busca_interna)
         
-        self.tree_busca = ttk.Treeview(main_frame, columns=("id", "ent", "desc", "valor"), show="headings", height=3)
+        self.tree_busca = ttk.Treeview(main_frame, columns=("id", "ent", "desc", "valor"), show="headings", height=3, style="Busca.Treeview")
         self.tree_busca.heading("id", text="ID"); self.tree_busca.heading("ent", text="FORNECEDOR")
         self.tree_busca.heading("desc", text="DESCRIÇÃO"); self.tree_busca.heading("valor", text="VALOR")
         for col in ("id", "ent", "desc", "valor"): self.tree_busca.column(col, width=80, anchor="w")
-        self.tree_busca.grid(row=3, column=0, columnspan=3, sticky="ew", pady=5, padx=5)
+        self.tree_busca.grid(row=3, column=0, columnspan=3, sticky="ew", pady=2, padx=5)
         self.tree_busca.bind("<<TreeviewSelect>>", self.selecionar_da_busca)
         self.tree_busca.bind("<Double-1>", self.editar_despesa_duplo_clique)
         self.tree_busca.bind("<Button-3>", self.menu_contexto)
@@ -114,25 +114,25 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.ent_vencimento = criar_campo(main_frame, "VENCIMENTO (DD/MM/AAAA)*", 7, 1)
         self.ent_vencimento.insert(0, datetime.now().strftime("%d/%m/%Y"))
         
-        tk.Label(main_frame, text="STATUS*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9, "bold")).grid(row=7, column=2, sticky="w", padx=5)
+        tk.Label(main_frame, text="STATUS*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=7, column=2, sticky="w", padx=5)
         self.cb_status = ttk.Combobox(main_frame, values=self.list_status, state="readonly", font=("Segoe UI", 9))
         self.cb_status.set("Pendente")
-        self.cb_status.grid(row=8, column=2, sticky="ew", padx=5, ipady=3)
+        self.cb_status.grid(row=8, column=2, sticky="ew", padx=5, ipady=2)
 
         # Linha de Configurações 
-        tk.Label(main_frame, text="CATEGORIA*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9, "bold")).grid(row=9, column=0, sticky="w", padx=5)
+        tk.Label(main_frame, text="CATEGORIA*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=9, column=0, sticky="w", padx=5)
         self.cb_cat = ttk.Combobox(main_frame, values=self.list_categorias, state="readonly", font=("Segoe UI", 9))
-        self.cb_cat.grid(row=10, column=0, sticky="ew", padx=5, ipady=3)
+        self.cb_cat.grid(row=10, column=0, sticky="ew", padx=5, ipady=2)
 
-        tk.Label(main_frame, text="FORMA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9, "bold")).grid(row=9, column=1, sticky="w", padx=5)
+        tk.Label(main_frame, text="FORMA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=9, column=1, sticky="w", padx=5)
         self.cb_forma = ttk.Combobox(main_frame, values=self.list_formas, state="readonly", font=("Segoe UI", 9))
         self.cb_forma.set("Dinheiro")
-        self.cb_forma.grid(row=10, column=1, sticky="ew", padx=5, ipady=3)
+        self.cb_forma.grid(row=10, column=1, sticky="ew", padx=5, ipady=2)
 
-        tk.Label(main_frame, text="RECORRÊNCIA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9, "bold")).grid(row=9, column=2, sticky="w", padx=5)
+        tk.Label(main_frame, text="RECORRÊNCIA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=9, column=2, sticky="w", padx=5)
         self.cb_recorrencia = ttk.Combobox(main_frame, values=self.list_recorrencia, state="readonly", font=("Segoe UI", 9))
         self.cb_recorrencia.set("Não Recorrente")
-        self.cb_recorrencia.grid(row=10, column=2, sticky="ew", padx=5, ipady=3)
+        self.cb_recorrencia.grid(row=10, column=2, sticky="ew", padx=5, ipady=2)
         self.cb_recorrencia.bind("<<ComboboxSelected>>", self.toggle_parcelas)
 
         # Sub-menu Parcelas
@@ -256,14 +256,53 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.btn_salvar.config(text="ATUALIZAR DESPESA", bg=self.cor_hover_field)
 
     def editar_despesa_duplo_clique(self, event):
-        """Editar despesa com duplo clique"""
+        """Editar despesa/receita com duplo clique - distingue tipo"""
         sel = self.tree_busca.selection()
         if not sel: return
-        id_d = self.tree_busca.item(sel)["values"][0]
+        id_item = self.tree_busca.item(sel)["values"][0]
+        
+        # Verificar se é receita ou despesa
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM financeiro WHERE id=?", (id_d,))
-            self.preencher_dados(cursor.fetchone())
+            cursor.execute("SELECT tipo FROM financeiro WHERE id=?", (id_item,))
+            tipo = cursor.fetchone()[0]
+        
+        if tipo == "Receita":
+            # Abrir cadastro de vendas para edição
+            from cadastro_vendas import JanelaCadastroVendas
+            # Buscar dados da venda
+            with database.conectar() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT v.id, c.nome, c.telefone, GROUP_CONCAT(p.produto), v.total, v.forma_pagamento, v.parcelas, v.desconto, v.data_venda
+                    FROM vendas v
+                    JOIN clientes c ON v.cliente_id = c.id
+                    JOIN vendas_itens vi ON v.id = vi.venda_id
+                    JOIN produtos p ON vi.produto_id = p.id
+                    WHERE v.id = ?
+                    GROUP BY v.id
+                """, (id_item,))
+                dados_venda = cursor.fetchone()
+            
+            if dados_venda:
+                # Criar dicionário com dados da venda para edição
+                dados_venda_dict = {
+                    'id': dados_venda[0],
+                    'cliente': f"{dados_venda[1]} - {dados_venda[2]}",
+                    'produtos': dados_venda[3],
+                    'total': dados_venda[4],
+                    'forma': dados_venda[5],
+                    'parcelas': dados_venda[6],
+                    'desconto': dados_venda[7],
+                    'data': dados_venda[8]
+                }
+                JanelaCadastroVendas(self, dados_venda=dados_venda_dict)
+        else:
+            # Abrir cadastro de despesas para edição
+            with database.conectar() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM financeiro WHERE id=?", (id_item,))
+                self.preencher_dados(cursor.fetchone())
 
     def menu_contexto(self, event):
         """Mostrar menu de contexto no botão direito"""
@@ -274,7 +313,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
             pass
 
     def editar_despesa_menu(self):
-        """Editar despesa via menu de contexto"""
+        """Editar despesa/receita via menu de contexto"""
         self.editar_despesa_duplo_clique(None)
 
     def quitar_despesa_menu(self):
@@ -325,6 +364,78 @@ class JanelaCadastroDespesas(tk.Toplevel):
                     self.master.exibir_financeiro()
             except Exception as e:
                 messagebox.showerror("Erro", f"Erro ao restaurar despesa: {str(e)}")
+
+
+class VisualizarRecibo(tk.Toplevel):
+    """Classe para visualizar recibo de venda"""
+    def __init__(self, master, id_venda):
+        super().__init__(master)
+        
+        # --- Paleta de cores ---
+        paleta = ui_utils.get_paleta()
+        self.bg_fundo = paleta["bg_fundo"]
+        self.bg_card = paleta["bg_card"]
+        self.cor_texto = paleta["cor_texto"]
+        self.cor_destaque = paleta["cor_destaque"]
+        
+        self.title("Recibo de Venda")
+        self.configure(bg=self.bg_fundo)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=400, altura_desejada=500)
+        
+        # Buscar dados da venda
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT v.id, c.nome, c.telefone, v.total, v.forma_pagamento, v.parcelas, v.desconto, v.data_venda,
+                       GROUP_CONCAT(CONCAT(p.produto, ' (', vi.qtd, 'x R$ ', vi.preco_unitario, ')')) as produtos
+                FROM vendas v
+                JOIN clientes c ON v.cliente_id = c.id
+                JOIN vendas_itens vi ON v.id = vi.venda_id
+                JOIN produtos p ON vi.produto_id = p.id
+                WHERE v.id = ?
+                GROUP BY v.id
+            """, (id_venda,))
+            dados = cursor.fetchone()
+        
+        if not dados:
+            messagebox.showerror("Erro", "Venda não encontrada!")
+            self.destroy()
+            return
+        
+        # Criar interface
+        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=20)
+        main_frame.pack(fill="both", expand=True)
+        
+        tk.Label(main_frame, text="🧾 RECIBO DE VENDA", bg=self.bg_fundo, 
+                 fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
+        
+        # Informações da venda
+        info_text = f"""
+ID da Venda: {dados[0]}
+Cliente: {dados[1]}
+Telefone: {dados[2]}
+Data: {dados[7]}
+
+Produtos:
+{dados[8].replace(',', '\n')}
+
+Forma de Pagamento: {dados[4]}
+Parcelas: {dados[5]}x
+Desconto: R$ {dados[6]:.2f}
+
+TOTAL: R$ {dados[3]:.2f}
+        """
+        
+        lbl_info = tk.Label(main_frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto,
+                           font=("Courier New", 10), justify="left", relief="solid", borderwidth=1)
+        lbl_info.pack(fill="both", expand=True, pady=(0, 20))
+        
+        # Botão fechar
+        tk.Button(main_frame, text="FECHAR", bg=self.cor_destaque, fg="white",
+                 font=("Segoe UI", 10, "bold"), command=self.destroy).pack()
+        
+        self.grab_set()
+
 
 if __name__ == "__main__":
     root = tk.Tk()
