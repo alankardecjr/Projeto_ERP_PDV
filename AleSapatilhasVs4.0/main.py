@@ -70,8 +70,9 @@ class SistemaAleSapatilhas:
             # --- Criando botões com estilo e hover ---
             btn = tk.Button(self.sidebar, text=texto, command=lambda c=comando, m=modo: self.executar_comando_menu(c, m), **btn_estilo)
             btn.pack(fill="x", pady=2)
-            btn.bind("<Enter>", lambda e, b=btn: b.config(bg=self.cor_hover_btn))
-            btn.bind("<Leave>", lambda e, b=btn: b.config(bg=self.cor_btn_menu))
+            # Hover removido conforme solicitação para retornar à configuração anterior
+            # btn.bind("<Enter>", lambda e, b=btn: b.config(bg=self.cor_hover_btn))
+            # btn.bind("<Leave>", lambda e, b=btn: b.config(bg=self.cor_btn_menu))
             
             # Armazenar referência se tem modo associado
             if modo:
@@ -107,12 +108,12 @@ class SistemaAleSapatilhas:
         self.tree = ttk.Treeview(self.tree_frame, show="headings", selectmode="browse")
         self.tree.pack(side="left", fill="both", expand=True)
 
-        # Barras de rolagem vertical e horizontal
-        scrollbar_v = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
-        scrollbar_v.pack(side="right", fill="y")
-        scrollbar_h = ttk.Scrollbar(self.tree_frame, orient="horizontal", command=self.tree.xview)
-        scrollbar_h.pack(side="bottom", fill="x")
-        self.tree.configure(yscrollcommand=scrollbar_v.set, xscrollcommand=scrollbar_h.set)
+        # Barras de rolagem vertical e horizontal - REMOVIDAS conforme solicitação
+        # scrollbar_v = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
+        # scrollbar_v.pack(side="right", fill="y")
+        # scrollbar_h = ttk.Scrollbar(self.tree_frame, orient="horizontal", command=self.tree.xview)
+        # scrollbar_h.pack(side="bottom", fill="x")
+        # self.tree.configure(yscrollcommand=scrollbar_v.set, xscrollcommand=scrollbar_h.set)
 
         # --- Bindings de interação ---
         self.tree.bind("<Double-1>", lambda e: self.editar_selecionado())
@@ -164,7 +165,7 @@ class SistemaAleSapatilhas:
         self.preparar_colunas(("nome", "cpf", "telefone", "aniversario", "calcado", "limite", "status"))    
         for c in database.exibir_clientes():
             # c[1]=nome, c[2]=cpf, c[3]=telefone, c[5]=aniversario, c[6]=calcado, c[12]=limite, c[14]=status
-            self.tree.insert("", "end", values=(c[1], c[2], c[3], c[5], c[6], f"R$ {c[12]:.2f}", c[14]))
+            self.tree.insert("", "end", iid=c[0], values=(c[1], c[2], c[3], c[5], c[6], f"R$ {c[12]:.2f}", c[14]))
 
     def exibir_produtos(self):
         self.modo_atual = "produtos"
@@ -173,14 +174,14 @@ class SistemaAleSapatilhas:
         self.preparar_colunas(("sku", "produto", "cor", "tamanho", "estoque", "preço", "fornecedor", "status"))
         for i in database.exibir_produtos():
             # i[1]=sku, i[2]=produto, i[3]=cor, i[4]=tamanho, i[7]=quantidade, i[6]=precovenda, i[10]=fornecedor, i[11]=status_item
-            self.tree.insert("", "end", values=(i[1], i[2], i[3], i[4], i[7], f"R$ {i[6]:.2f}", i[10], i[11]))
+            self.tree.insert("", "end", iid=i[0], values=(i[1], i[2], i[3], i[4], i[7], f"R$ {i[6]:.2f}", i[10], i[11]))
 
     def exibir_vendas(self):
         self.modo_atual = "vendas"
         self.lbl_titulo.config(text="📑 HISTÓRICO DE VENDAS")
         self.preparar_colunas(("cliente", "total", "forma", "data", "status"))
         for v in database.relatorio_vendas_geral():
-            self.tree.insert("", "end", values=(v[1], f"R$ {v[2]:.2f}", v[3], v[5], v[7]))
+            self.tree.insert("", "end", iid=v[0], values=(v[1], f"R$ {v[2]:.2f}", v[3], v[5], v[7]))
 
     def exibir_financeiro(self):
         self.modo_atual = "financeiro"
@@ -188,10 +189,10 @@ class SistemaAleSapatilhas:
         self.preparar_colunas(("tipo", "Fornecedor", "descrição", "parcelas", "valor", "vencimento", "pagamento", "forma", "categoria", "recorrencia", "status"))
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT tipo, entidade_nome, descricao,total_parcelas, valor, data_vencimento, data_pagamento, forma_pagamento, categoria, status FROM financeiro ORDER BY data_vencimento DESC")
+            cursor.execute("SELECT id, tipo, entidade_nome, descricao,total_parcelas, valor, data_vencimento, data_pagamento, forma_pagamento, categoria, status FROM financeiro ORDER BY data_vencimento DESC")
             for f in cursor.fetchall():
-                recorrencia = "Sim" if f[3] > 1 else "Não"
-                self.tree.insert("", "end", values=(f[0], f[1], f[2], f[3], f"R$ {f[4]:.2f}", f[5], f[6], f[7], f[8], recorrencia, f[9]))
+                recorrencia = "Sim" if f[4] > 1 else "Não"
+                self.tree.insert("", "end", iid=f[0], values=(f[1], f[2], f[3], f[4], f"R$ {f[5]:.2f}", f[6], f[7], f[8], f[9], recorrencia, f[10]))
 
     def exibir_dashboard(self):
         res = database.dashboard_resumo()
@@ -209,7 +210,7 @@ class SistemaAleSapatilhas:
         cliente_selecionado = None
         
         if self.modo_atual == "clientes" and selection:
-            valores = self.tree.item(selection, "values")
+            valores = self.tree.item(selection[0], "values")
             cliente_selecionado = (valores[0], valores[1], valores[3])  # (id, nome, telefone)
         
         from cadastro_vendas import JanelaCadastroVendas
@@ -234,7 +235,7 @@ class SistemaAleSapatilhas:
     def editar_selecionado(self):
         item_id = self.tree.selection()
         if not item_id: return
-        id_banco = self.tree.item(item_id, "values")[0]
+        id_banco = item_id[0]  # iid é o id do banco
 
         if self.modo_atual == "clientes":
             from cadastro_clientes import JanelaCadastroClientes
@@ -314,7 +315,7 @@ class SistemaAleSapatilhas:
     def quitar_selecionado(self):
         item = self.tree.selection()
         if not item: return
-        id_banco = self.tree.item(item, "values")[0]
+        id_banco = item[0]
         database.quitar_titulo_financeiro(id_banco, "Dinheiro")
         self.exibir_financeiro()
 
@@ -335,7 +336,7 @@ class SistemaAleSapatilhas:
     def bloquear_cliente(self):
         item = self.tree.selection()
         if not item: return
-        id_banco = self.tree.item(item, "values")[0]
+        id_banco = item[0]
         
         if messagebox.askyesno("Confirmar", "Deseja bloquear este cliente?"):
             database.atualizar_cliente(id_banco, status_cliente='Bloqueado')
@@ -344,7 +345,7 @@ class SistemaAleSapatilhas:
     def restaurar_cliente(self):
         item = self.tree.selection()
         if not item: return
-        id_banco = self.tree.item(item, "values")[0]
+        id_banco = item[0]
         
         # Buscar status atual
         with database.conectar() as conn:
@@ -368,7 +369,7 @@ class SistemaAleSapatilhas:
     def indisponibilizar_produto(self):
         item = self.tree.selection()
         if not item: return
-        id_banco = self.tree.item(item, "values")[0]
+        id_banco = item[0]
         
         if messagebox.askyesno("Confirmar", "Deseja indisponibilizar este produto?"):
             database.atualizar_produto(id_banco, status_item='Indisponível')
@@ -377,7 +378,7 @@ class SistemaAleSapatilhas:
     def restaurar_produto(self):
         item = self.tree.selection()
         if not item: return
-        id_banco = self.tree.item(item, "values")[0]
+        id_banco = item[0]
         
         # Buscar status atual
         with database.conectar() as conn:
@@ -413,7 +414,7 @@ class SistemaAleSapatilhas:
     def editar_despesa(self):
         item = self.tree.selection()
         if not item: return
-        id_banco = self.tree.item(item, "values")[0]
+        id_banco = item[0]
         
         from cadastro_despesas import JanelaCadastroDespesas
         with database.conectar() as conn:
@@ -427,7 +428,7 @@ class SistemaAleSapatilhas:
     def restaurar_despesa(self):
         item = self.tree.selection()
         if not item: return
-        id_banco = self.tree.item(item, "values")[0]
+        id_banco = item[0]
         
         # Buscar status atual
         with database.conectar() as conn:
@@ -453,7 +454,7 @@ class SistemaAleSapatilhas:
     def editar_venda(self):
         item = self.tree.selection()
         if not item: return
-        id_banco = self.tree.item(item, "values")[0]
+        id_banco = item[0]
         
         from cadastro_vendas import JanelaCadastroVendas
         with database.conectar() as conn:
@@ -481,7 +482,7 @@ class SistemaAleSapatilhas:
     def visualizar_venda(self):
         item = self.tree.selection()
         if not item: return
-        id_banco = self.tree.item(item, "values")[0]
+        id_banco = item[0]
         
         from cadastro_despesas import VisualizarRecibo
         VisualizarRecibo(self.root, id_venda=id_banco)
