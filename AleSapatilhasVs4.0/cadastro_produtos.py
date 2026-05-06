@@ -28,8 +28,8 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
         
-        # --- Aplicar dimensões padrão (600px largura, altura aumentada) ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=1000)
+        # --- Aplicar dimensões padrão (600px largura, altura ajustada) ---
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=850)
 
         self.produto_id = dados_produto[0] if dados_produto else None
         
@@ -55,8 +55,25 @@ class JanelaCadastroProdutos(tk.Toplevel):
         style.configure("Busca.Treeview", background="#F8FAFC", rowheight=22, font=("Segoe UI", 9))
 
     def criar_widgets(self):
-        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=10)
-        main_frame.pack(fill="both", expand=True)
+        wrapper = tk.Frame(self, bg=self.bg_fundo)
+        wrapper.pack(fill="both", expand=True)
+
+        canvas = tk.Canvas(wrapper, bg=self.bg_fundo, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(wrapper, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        main_frame = tk.Frame(canvas, bg=self.bg_fundo, padx=20, pady=10)
+        self.canvas_frame = canvas.create_window((0, 0), window=main_frame, anchor="nw")
+
+        def _update_scroll_region(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        main_frame.bind("<Configure>", _update_scroll_region)
+        def _resize_frame(event):
+            canvas.itemconfigure(self.canvas_frame, width=event.width)
+        canvas.bind("<Configure>", _resize_frame)
+
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
 
@@ -102,7 +119,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.ent_busca_interna.bind("<KeyRelease>", self.filtrar_busca_interna)
         aplicar_estilo_foco(self.ent_busca_interna)
 
-        self.tree_busca = ttk.Treeview(main_frame, columns=("id", "prod", "forn"), show="headings", height=3, style="Busca.Treeview")
+        self.tree_busca = ttk.Treeview(main_frame, columns=("id", "prod", "forn"), show="headings", height=2, style="Busca.Treeview")
         self.tree_busca.heading("id", text="ID")
         self.tree_busca.heading("prod", text="MODELO")
         self.tree_busca.heading("forn", text="FORNECEDOR")

@@ -58,8 +58,25 @@ class JanelaCadastroDespesas(tk.Toplevel):
         except: return None
 
     def criar_widgets(self):
-        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=10)
-        main_frame.pack(fill="both", expand=True)
+        wrapper = tk.Frame(self, bg=self.bg_fundo)
+        wrapper.pack(fill="both", expand=True)
+
+        canvas = tk.Canvas(wrapper, bg=self.bg_fundo, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(wrapper, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        main_frame = tk.Frame(canvas, bg=self.bg_fundo, padx=20, pady=10)
+        self.canvas_frame = canvas.create_window((0, 0), window=main_frame, anchor="nw")
+
+        def _update_scroll_region(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        main_frame.bind("<Configure>", _update_scroll_region)
+        def _resize_frame(event):
+            canvas.itemconfigure(self.canvas_frame, width=event.width)
+        canvas.bind("<Configure>", _resize_frame)
+
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
 
@@ -95,7 +112,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.ent_busca_interna.grid(row=2, column=0, columnspan=3, sticky="ew", padx=5, ipady=3, pady=5)
         self.ent_busca_interna.bind("<KeyRelease>", self.filtrar_busca_interna)
         
-        self.tree_busca = ttk.Treeview(main_frame, columns=("id", "ent", "desc", "valor"), show="headings", height=3, style="Busca.Treeview")
+        self.tree_busca = ttk.Treeview(main_frame, columns=("id", "ent", "desc", "valor"), show="headings", height=2, style="Busca.Treeview")
         self.tree_busca.heading("id", text="ID"); self.tree_busca.heading("ent", text="FORNECEDOR")
         self.tree_busca.heading("desc", text="DESCRIÇÃO"); self.tree_busca.heading("valor", text="VALOR")
         for col in ("id", "ent", "desc", "valor"): self.tree_busca.column(col, width=80, anchor="w")
@@ -147,7 +164,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
 
         # --- TREEVIEW HISTÓRICO ---
         tk.Label(main_frame, text="HISTÓRICO / DETALHES DAS PARCELAS", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 8, "bold")).grid(row=12, column=0, columnspan=3, sticky="w", pady=(15, 2), padx=5)
-        self.tree_pagos = ttk.Treeview(main_frame, columns=("parc", "venc", "pagto", "valor", "forma", "status"), show="headings", height=5, style="Hist.Treeview")
+        self.tree_pagos = ttk.Treeview(main_frame, columns=("parc", "venc", "pagto", "valor", "forma", "status"), show="headings", height=3, style="Hist.Treeview")
         
         headers = {"parc": "Nº", "venc": "VENC.", "pagto": "PAGTO", "valor": "VALOR", "forma": "FORMA", "status": "STATUS"}
         for col, text in headers.items():
