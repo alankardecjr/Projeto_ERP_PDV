@@ -7,7 +7,7 @@ class JanelaCadastroClientes(tk.Toplevel):
     def __init__(self, master, dados_cliente=None):
         super().__init__(master)
 
-        # --- Paleta de cores ---
+        # --- Paleta de cores (Padronizada) ---
         paleta = ui_utils.get_paleta()
         self.bg_fundo       = paleta["bg_fundo"]
         self.bg_card        = paleta["bg_card"]
@@ -68,7 +68,7 @@ class JanelaCadastroClientes(tk.Toplevel):
             return ent
 
         # --- Título ---
-        tk.Label(main_frame, text="Ficha Cadastral do Cliente", bg=self.bg_fundo, 
+        tk.Label(main_frame, text="Ficha Cadastro Cliente", bg=self.bg_fundo, 
                  fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 5))
 
         # --- Campos ---
@@ -109,19 +109,10 @@ class JanelaCadastroClientes(tk.Toplevel):
                                     command=self.salvar_dados)
         self.btn_salvar.grid(row=19, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
         
-        # --- Botão Gerar Venda (apenas se cliente já cadastrado) ---
-        if self.cliente_id:
-            self.btn_gerar_venda = tk.Button(main_frame, text="🛒 GERAR VENDA", bg=self.cor_destaque, fg="white", 
-                                             font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
-                                             command=self.gerar_venda)
-            self.btn_gerar_venda.grid(row=20, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
-            self.btn_gerar_venda.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
-            self.btn_gerar_venda.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_destaque))
-        
         self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_sair, fg="white", 
                                       font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                       command=self.destroy)
-        self.btn_cancelar.grid(row=21 if self.cliente_id else 20, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
+        self.btn_cancelar.grid(row=20, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
 
         # --- Hovers ---
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
@@ -199,27 +190,6 @@ class JanelaCadastroClientes(tk.Toplevel):
         # Atualiza o botão para o padrão de edição (Roxo)
         self.cor_base_acao = self.cor_hover_field
         self.btn_salvar.config(text="ATUALIZAR CADASTRO", bg=self.cor_base_acao)
-
-    def editar_cliente_menu(self):
-        """Editar cliente via menu de contexto (placeholder)"""
-        messagebox.showinfo("Editar", "Função será implementada no menu principal")
-
-    def bloquear_cliente_menu(self):
-        """Bloquear cliente via menu de contexto (placeholder)"""
-        messagebox.showinfo("Bloquear", "Função será implementada no menu principal")
-
-    def gerar_venda(self):
-        """Abre o PDV com o cliente pré-selecionado"""
-        from cadastro_vendas import JanelaCadastroVendas
-        # Fecha a janela atual
-        self.destroy()
-        # Abre o PDV com cliente selecionado
-        cliente_dados = (self.cliente_id, self.ent_nome.get(), self.ent_tel.get())
-        JanelaCadastroVendas(self.master, cliente_selecionado=cliente_dados)
-
-    def restaurar_cliente_menu(self):
-        """Restaurar cliente via menu de contexto (placeholder)"""
-        messagebox.showinfo("Restaurar", "Função será implementada no menu principal")
 
 if __name__ == "__main__":
     root = tk.Tk()

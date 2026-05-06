@@ -30,7 +30,6 @@ def criar_tabelas():
             material TEXT,
             fornecedor TEXT,
             status_item TEXT DEFAULT 'Disponível' CHECK(status_item IN ('Disponível', 'Indisponível', 'Esgotado', 'Promocional')),
-            foto TEXT DEFAULT '',
             ultima_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
 
@@ -111,25 +110,19 @@ def criar_tabelas():
             UPDATE produtos SET status_item = 'Disponível' WHERE id = NEW.id AND quantidade > 0 AND status_item = 'Esgotado';
         END;
         """)
-
-        # --- Atualiza tabela existente para suportar imagem de produto sem quebrar dados já criados ---
-        cursor.execute("PRAGMA table_info(produtos)")
-        colunas_produtos = [row[1] for row in cursor.fetchall()]
-        if "foto" not in colunas_produtos:
-            cursor.execute("ALTER TABLE produtos ADD COLUMN foto TEXT DEFAULT ''")
         
         conn.commit()
 
 # --- Funções de produtos ---
-def cadastrar_produto(sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto=""):
+def cadastrar_produto(sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor):
     # --- Insere um novo produto no catálogo e retorna verdadeiro se o sku for único, caso contrário retorna falso ---
     try:
         with conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO produtos (sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto))
+                INSERT INTO produtos (sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor))
             return True
     except sqlite3.IntegrityError:
         return False
@@ -138,7 +131,7 @@ def exibir_produtos():
     # --- Recupera a lista completa de produtos cadastrados com seus principais detalhes técnicos e comerciais ---
     with conectar() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item, foto FROM produtos")
+        cursor.execute("SELECT id, sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item FROM produtos")
         return cursor.fetchall()
 
 def atualizar_produto(produto_id, **kwargs):

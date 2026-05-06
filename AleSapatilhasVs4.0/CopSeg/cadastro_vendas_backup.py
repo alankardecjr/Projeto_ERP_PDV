@@ -2,11 +2,9 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import database 
 import ui_utils
-from PIL import Image
-import os
 
 class JanelaCadastroVendas(tk.Toplevel):
-    def __init__(self, master, cliente_selecionado=None):
+    def __init__(self, master):
         super().__init__(master)
 
         # --- Importar paleta de cores ---
@@ -31,16 +29,11 @@ class JanelaCadastroVendas(tk.Toplevel):
         # --- Aplicar dimensões ---
         ui_utils.calcular_dimensoes_janela(self, largura_desejada=1200, altura_desejada=750)
         
-        self.cliente_selecionado = cliente_selecionado # (id, nome, tel) ou None
+        self.cliente_selecionado = None # (id, nome, tel)
         self.carrinho = [] # [(id, produto, qtd, preco)]
 
         self.setup_layout()
         self.carregar_produtos()
-        
-        # Se cliente foi passado, pré-selecionar
-        if self.cliente_selecionado:
-            self.lbl_info_cliente.config(text=f"✓ {self.cliente_selecionado[1]}", fg="green")
-        
         self.grab_set()
 
     def setup_layout(self):
@@ -77,11 +70,11 @@ class JanelaCadastroVendas(tk.Toplevel):
         btn_add.pack(fill="x", pady=10, ipady=8)
 
         # --- TABELA CARRINHO ---
-        # Adicionada coluna de Foto para mostrar miniatura
-        self.tree = ttk.Treeview(self.frame_esq, columns=("Foto", "ID", "Produto", "Qtd", "Preço", "Subtotal"), show="headings")
-        for col, width in [("Foto", 60), ("ID", 40), ("Produto", 150), ("Qtd", 50), ("Preço", 80), ("Subtotal", 80)]:
+        self.tree = ttk.Treeview(self.frame_esq, columns=("ID", "Produto", "Qtd", "Preço", "Subtotal"), show="headings")
+        for col in self.tree["columns"]:
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=width, anchor="center")
+            self.tree.column(col, width=80, anchor="center")
+        self.tree.column("Produto", width=200)
         self.tree.pack(fill="both", expand=True)
         
         btn_remover = tk.Button(self.frame_esq, text="REMOVER ITEM SELECIONADO", bg="#ef4444", fg="white", font=("Segoe UI", 8), relief="flat", command=self.remover_item)
@@ -139,7 +132,7 @@ class JanelaCadastroVendas(tk.Toplevel):
         sel = self.cb_produtos.current()
         if sel < 0: return
         
-        p = self.produtos_db[sel] # (id, prod, cor, tam, custo, venda, qtd, cat, mat, forn, status, foto)
+        p = self.produtos_db[sel] # (id, prod, cor, tam, custo, venda, qtd...)
         
         # Verifica se já está no carrinho para somar qtd
         for item in self.carrinho:
@@ -148,44 +141,15 @@ class JanelaCadastroVendas(tk.Toplevel):
                 return
 
         subtotal = p[5]
-        
-        # Carregar miniatura da foto
-        foto_miniatura = self.carregar_miniatura_foto(p[12])  # p[12] é o caminho da foto
-        
-        self.carrinho.append([p[0], p[1], 1, p[5], subtotal, foto_miniatura])
-        self.tree.insert("", "end", values=("", p[0], p[1], 1, f"R$ {p[5]:.2f}", f"R$ {subtotal:.2f}"))
-        
-        # Inserir a imagem na primeira coluna
-        item_id = self.tree.get_children()[-1]  # Último item inserido
-        if foto_miniatura:
-            self.tree.set(item_id, "Foto", "")  # Placeholder para a imagem
-            # Armazenar referência da imagem para evitar garbage collection
-            if not hasattr(self, 'imagens_carrinho'):
-                self.imagens_carrinho = []
-            self.imagens_carrinho.append(foto_miniatura)
-        
+        self.carrinho.append([p[0], p[1], 1, p[5], subtotal])
+        self.tree.insert("", "end", values=(p[0], p[1], 1, f"R$ {p[5]:.2f}", f"R$ {subtotal:.2f}"))
         self.atualizar_totais()
-
-    def carregar_miniatura_foto(self, caminho_foto):
-        """Carrega e redimensiona a foto do produto para miniatura"""
-        if not caminho_foto or not os.path.exists(caminho_foto):
-            return None
-        
-        try:
-            # Carregar imagem e redimensionar para 40x40 pixels
-            img = Image.open(caminho_foto)
-            img = img.resize((40, 40), Image.Resampling.LANCZOS)
-            return tk.PhotoImage(img)
-        except Exception as e:
-            print(f"Erro ao carregar foto {caminho_foto}: {e}")
-            return None
 
     def remover_item(self):
         sel = self.tree.selection()
         if not sel: return
         item_values = self.tree.item(sel)["values"]
-        # Remover do carrinho (item[1] é o ID do produto)
-        self.carrinho = [i for i in self.carrinho if i[0] != item_values[1]]  # item_values[1] é o ID
+        self.carrinho = [i for i in self.carrinho if i[0] != item_values[0]]
         self.tree.delete(sel)
         self.atualizar_totais()
 

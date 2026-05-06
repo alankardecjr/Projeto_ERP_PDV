@@ -27,8 +27,8 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
         
-        # --- Aplicar dimensões padrão (600px largura, altura aumentada) ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=900)
+        # --- Aplicar dimensões padrão (600px largura) ---
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=820)
         
         self.despesa_id = dados_despesa[0] if dados_despesa else None
         
@@ -101,8 +101,6 @@ class JanelaCadastroDespesas(tk.Toplevel):
         for col in ("id", "ent", "desc", "valor"): self.tree_busca.column(col, width=80, anchor="w")
         self.tree_busca.grid(row=3, column=0, columnspan=3, sticky="ew", pady=5, padx=5)
         self.tree_busca.bind("<<TreeviewSelect>>", self.selecionar_da_busca)
-        self.tree_busca.bind("<Double-1>", self.editar_despesa_duplo_clique)
-        self.tree_busca.bind("<Button-3>", self.menu_contexto)
 
         # --- FORMULÁRIO ---
         self.ent_entidade = criar_campo(main_frame, "FORNECEDOR*", 3, 0, colspan=3)
@@ -168,14 +166,6 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.btn_salvar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_btn_acao))
         self.btn_cancelar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_cancelar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_btn_sair))
-
-        # --- Menu de contexto (botão direito) ---
-        self.menu_contexto = tk.Menu(self, tearoff=0)
-        self.menu_contexto.add_command(label="Editar", command=self.editar_despesa_menu)
-        self.menu_contexto.add_command(label="Quitar", command=self.quitar_despesa_menu)
-        self.menu_contexto.add_command(label="Restaurar", command=self.restaurar_despesa_menu)
-        self.menu_contexto.add_separator()
-        self.menu_contexto.add_command(label="Sair", command=self.destroy)
 
         self.atualizar_tree_busca()
 
@@ -254,77 +244,6 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.cb_cat.set(d[11] if d[11] else "Outros")
         self.cb_status.set(d[12])
         self.btn_salvar.config(text="ATUALIZAR DESPESA", bg=self.cor_hover_field)
-
-    def editar_despesa_duplo_clique(self, event):
-        """Editar despesa com duplo clique"""
-        sel = self.tree_busca.selection()
-        if not sel: return
-        id_d = self.tree_busca.item(sel)["values"][0]
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM financeiro WHERE id=?", (id_d,))
-            self.preencher_dados(cursor.fetchone())
-
-    def menu_contexto(self, event):
-        """Mostrar menu de contexto no botão direito"""
-        try:
-            self.tree_busca.selection_set(self.tree_busca.identify_row(event.y))
-            self.menu_contexto.post(event.x_root, event.y_root)
-        except:
-            pass
-
-    def editar_despesa_menu(self):
-        """Editar despesa via menu de contexto"""
-        self.editar_despesa_duplo_clique(None)
-
-    def quitar_despesa_menu(self):
-        """Quitar despesa via menu de contexto"""
-        sel = self.tree_busca.selection()
-        if not sel: return
-        id_d = self.tree_busca.item(sel)["values"][0]
-        
-        if messagebox.askyesno("Confirmar", "Deseja quitar esta despesa?"):
-            try:
-                database.quitar_titulo_financeiro(id_d, "Diversos")
-                messagebox.showinfo("Sucesso", "Despesa quitada!")
-                self.atualizar_tree_busca()
-                if hasattr(self.master, "exibir_financeiro"): 
-                    self.master.exibir_financeiro()
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao quitar despesa: {str(e)}")
-
-    def restaurar_despesa_menu(self):
-        """Restaurar despesa via menu de contexto"""
-        sel = self.tree_busca.selection()
-        if not sel: return
-        id_d = self.tree_busca.item(sel)["values"][0]
-        
-        # Buscar status atual
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status FROM financeiro WHERE id=?", (id_d,))
-            status_atual = cursor.fetchone()[0]
-        
-        # Definir status anterior baseado no atual
-        if status_atual == "Pago":
-            novo_status = "Pendente"
-        elif status_atual == "Cancelado":
-            novo_status = "Pendente"
-        elif status_atual == "Atrasado":
-            novo_status = "Pendente"
-        else:
-            messagebox.showinfo("Info", "Não há status anterior para restaurar.")
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Restaurar despesa para '{novo_status}'?"):
-            try:
-                database.atualizar_financeiro(id_d, status=novo_status)
-                messagebox.showinfo("Sucesso", "Despesa restaurada!")
-                self.atualizar_tree_busca()
-                if hasattr(self.master, "exibir_financeiro"): 
-                    self.master.exibir_financeiro()
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao restaurar despesa: {str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -1,6 +1,5 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
-from datetime import datetime
 import database 
 import ui_utils
 
@@ -23,12 +22,12 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.cor_hover_field = paleta["cor_hover_field"]
 
         # --- Configurações da janela ---
-        self.title("Alê Sapatilhas - Gestão do Estoque")
+        self.title("Alê Sapatilhas - Gestão de Estoque")
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
         
-        # --- Aplicar dimensões padrão (600px largura, altura aumentada) ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=950)
+        # --- Aplicar dimensões padrão (600px largura) ---
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=820)
 
         self.produto_id = dados_produto[0] if dados_produto else None
         
@@ -89,7 +88,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
             combo.grid(row=row+1, column=col, columnspan=span, sticky="ew", padx=(0, 5) if col==0 else 0)
             return combo
 
-        tk.Label(main_frame, text="Ficha Cadastral do Produto", bg=self.bg_fundo, 
+        tk.Label(main_frame, text="Ficha Cadastro Produto", bg=self.bg_fundo, 
                  fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 15))
 
         tk.Label(main_frame, text="🔍 BUSCA RÁPIDA", bg=self.bg_fundo, 
@@ -111,55 +110,27 @@ class JanelaCadastroProdutos(tk.Toplevel):
 
         tk.Frame(main_frame, height=1, bg=self.cor_borda).grid(row=4, column=0, columnspan=2, sticky="ew", pady=5)
 
-        self.ent_produto = criar_campo(main_frame, "DESCRIÇÃO DO MODELO*", 5)
-        self.cb_cat      = criar_combo(main_frame, "CATEGORIA*", self.list_categorias, 7, 0)
-        self.cb_mat      = criar_combo(main_frame, "MATERIAL", self.list_materiais, 7, 1)
+        self.ent_sku     = criar_campo(main_frame, "CÓDIGO DO PRODUTO*", 5)
+        self.ent_produto = criar_campo(main_frame, "DESCRIÇÃO DO MODELO*", 7)
+        self.cb_cat      = criar_combo(main_frame, "CATEGORIA*", self.list_categorias, 9, 0)
+        self.cb_mat      = criar_combo(main_frame, "MATERIAL", self.list_materiais, 9, 1)
 
-        self.ent_custo = criar_campo(main_frame, "PREÇO DE CUSTO (R$)*", 9, col=0, colspan=1)
+        self.ent_custo = criar_campo(main_frame, "PREÇO DE CUSTO (R$)*", 11, col=0, colspan=1)
         self.ent_custo.bind("<KeyRelease>", self.calcular_markup)
         
         tk.Label(main_frame, text="PREÇO DE VENDA (R$)*", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=9, column=1, sticky="w", pady=(3, 0))
+                 font=("Segoe UI", 8, "bold")).grid(row=11, column=1, sticky="w", pady=(3, 0))
         self.ent_venda = tk.Entry(main_frame, font=("Segoe UI", 10, "bold"), bg="#E2E8F0", fg=self.cor_destaque, 
                                   relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-        self.ent_venda.grid(row=10, column=1, sticky="ew", ipady=3)
+        self.ent_venda.grid(row=12, column=1, sticky="ew", ipady=3)
 
-        self.ent_forn = criar_campo(main_frame, "FORNECEDOR*", 11)
+        self.ent_forn = criar_campo(main_frame, "FORNECEDOR*", 13)
 
-        # --- Campo Data do Lançamento ---
-        tk.Label(main_frame, text="DATA DO LANÇAMENTO", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=13, column=0, sticky="w", pady=(3, 0))
-        self.ent_data_lancamento = tk.Entry(main_frame, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto,
-                                           relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-        self.ent_data_lancamento.grid(row=14, column=0, sticky="ew", ipady=3, padx=(0, 5))
-        self.ent_data_lancamento.insert(0, datetime.now().strftime("%d/%m/%Y"))
-        aplicar_estilo_foco(self.ent_data_lancamento)
-
-        # --- Campo Status do Produto ---
-        tk.Label(main_frame, text="STATUS DO PRODUTO*", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=13, column=1, sticky="w", pady=(3, 0))
-        self.var_status_produto = tk.StringVar(value="Disponível")
-        self.opt_status_produto = tk.OptionMenu(main_frame, self.var_status_produto, "Disponível", "Indisponível", "Esgotado", "Promocional")
-        self.opt_status_produto.config(bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, 
-                                      highlightbackground=self.cor_borda, font=("Segoe UI", 10), cursor="hand2")
-        self.opt_status_produto.grid(row=14, column=1, sticky="ew", pady=(1, 0))
-
-        # --- GRADE DE ESTOQUE E FOTO ---
         tk.Label(main_frame, text="GRADE DE ESTOQUE", bg=self.bg_fundo, fg=self.cor_texto, 
                  font=("Segoe UI", 9, "bold")).grid(row=15, column=0, sticky="w", pady=(10, 2))
         
-        tk.Label(main_frame, text="FOTO DO PRODUTO", bg=self.bg_fundo, fg=self.cor_texto, 
-                 font=("Segoe UI", 9, "bold")).grid(row=15, column=1, sticky="w", pady=(10, 2))
-        
-        # Frame para grade e foto lado a lado
-        frame_conteudo = tk.Frame(main_frame, bg=self.bg_fundo)
-        frame_conteudo.grid(row=16, column=0, columnspan=2, sticky="ew", pady=(0, 10))
-        frame_conteudo.columnconfigure(0, weight=1)
-        frame_conteudo.columnconfigure(1, weight=1)
-
-        # --- GRADE DE ESTOQUE (lado esquerdo) ---
-        frame_grade = tk.LabelFrame(frame_conteudo, bg=self.bg_card, relief="groove", borderwidth=1, padx=10, pady=10, text="Estoque")
-        frame_grade.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        frame_grade = tk.LabelFrame(main_frame, bg=self.bg_card, relief="groove", borderwidth=1, padx=10, pady=10)
+        frame_grade.grid(row=16, column=0, columnspan=2, sticky="ew")
         frame_grade.columnconfigure(0, weight=1)
 
         self.cb_cor = criar_combo(frame_grade, "COR*", self.list_cores, 0, 0, 2)
@@ -173,24 +144,6 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.opt_status.config(bg=self.bg_fundo, fg=self.cor_texto, relief="flat", highlightthickness=1, 
                                 highlightbackground=self.cor_borda, font=("Segoe UI", 9), cursor="hand2")
         self.opt_status.grid(row=5, column=1, sticky="ew", pady=(1, 0))
-
-        # --- ESPAÇO PARA FOTO (lado direito) ---
-        frame_foto = tk.LabelFrame(frame_conteudo, bg=self.bg_card, relief="groove", borderwidth=1, padx=10, pady=10, text="Foto")
-        frame_foto.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        
-        # Placeholder para foto
-        self.lbl_foto = tk.Label(frame_foto, text="📷\n\nClique para\nadicionar foto", 
-                                bg="#F8FAFC", fg=self.cor_texto, font=("Segoe UI", 10), 
-                                relief="flat", cursor="hand2", width=15, height=6)
-        self.lbl_foto.pack(expand=True, fill="both", padx=5, pady=5)
-        self.lbl_foto.bind("<Button-1>", self.selecionar_foto)
-
-        # --- Campo SKU (no final, apenas visualização) ---
-        tk.Label(main_frame, text="CÓDIGO DO PRODUTO (SKU)", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=17, column=0, sticky="w", pady=(10, 0))
-        self.ent_sku = tk.Entry(main_frame, font=("Segoe UI", 10, "bold"), bg="#F8FAFC", fg=self.cor_destaque, 
-                               relief="flat", highlightbackground=self.cor_borda, highlightthickness=1, state="readonly")
-        self.ent_sku.grid(row=18, column=0, columnspan=2, sticky="ew", ipady=3, pady=(0, 10))
         
         # --- BOTÕES (Dual Mode e Hover) ---
         texto_botao = "ATUALIZAR PRODUTO" if self.produto_id else "SALVAR PRODUTO"
@@ -199,32 +152,19 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.btn_salvar = tk.Button(main_frame, text=texto_botao, bg=cor_base_acao, fg="white", 
                                     font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                     command=self.validar_e_salvar)
-        self.btn_salvar.grid(row=19, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
+        self.btn_salvar.grid(row=17, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
         
         self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_sair, fg="white", 
                                       font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                       command=self.destroy)
-        self.btn_cancelar.grid(row=20, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
+        self.btn_cancelar.grid(row=18, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
 
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_salvar.bind("<Leave>", lambda e: e.widget.config(bg=cor_base_acao))
         self.btn_cancelar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_cancelar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_btn_sair))
 
-        # --- Menu de contexto (botão direito) ---
-        self.menu_contexto = tk.Menu(self, tearoff=0)
-        self.menu_contexto.add_command(label="Editar", command=self.editar_produto_menu)
-        self.menu_contexto.add_command(label="Indisponibilizar", command=self.indisponibilizar_produto_menu)
-        self.menu_contexto.add_command(label="Restaurar", command=self.restaurar_produto_menu)
-        self.menu_contexto.add_separator()
-        self.menu_contexto.add_command(label="Sair", command=self.destroy)
-
-        # Bindings para treeview
-        self.tree_busca.bind("<Double-1>", self.editar_produto_duplo_clique)
-        self.tree_busca.bind("<Button-3>", self.menu_contexto_produto)
-
         self.atualizar_tree_busca()
-        self.gerar_sku_automatico()  # Gerar SKU inicial
 
     def calcular_markup(self, event=None):
         try:
@@ -314,95 +254,6 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.ent_forn.delete(0, tk.END); self.ent_forn.insert(0, d[10] if d[10] else "")
         self.var_status.set(d[11])
         self.btn_salvar.config(text="ATUALIZAR PRODUTO", bg=self.cor_hover_field)
-
-    def gerar_sku_automatico(self):
-        """Gera SKU automaticamente baseado nos dados do produto"""
-        produto = self.ent_produto.get().strip()[:3].upper() if self.ent_produto.get().strip() else "XXX"
-        cor = self.cb_cor.get()[:2].upper() if self.cb_cor.get() else "XX"
-        tam = self.cb_tam.get() if self.cb_tam.get() else "XX"
-        categoria = self.cb_cat.get()[:2].upper() if self.cb_cat.get() else "XX"
-        
-        # Formato: PRODUTO-COR-TAMANHO-CATEGORIA
-        sku = f"{produto}-{cor}-{tam}-{categoria}"
-        self.ent_sku.config(state="normal")
-        self.ent_sku.delete(0, tk.END)
-        self.ent_sku.insert(0, sku)
-        self.ent_sku.config(state="readonly")
-
-    def selecionar_foto(self, event):
-        """Placeholder para seleção de foto do produto"""
-        messagebox.showinfo("Foto do Produto", "Funcionalidade de foto será implementada em breve!")
-
-    def editar_produto_duplo_clique(self, event):
-        """Editar produto com duplo clique"""
-        selecao = self.tree_busca.selection()
-        if not selecao: return
-        id_prod = self.tree_busca.item(selecao)["values"][0]
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_prod,))
-            dados = cursor.fetchone()
-            if dados:
-                self.preencher_dados(dados)
-
-    def menu_contexto_produto(self, event):
-        """Mostrar menu de contexto no botão direito"""
-        try:
-            self.tree_busca.selection_set(self.tree_busca.identify_row(event.y))
-            self.menu_contexto.post(event.x_root, event.y_root)
-        except:
-            pass
-
-    def editar_produto_menu(self):
-        """Editar produto via menu de contexto"""
-        self.editar_produto_duplo_clique(None)
-
-    def indisponibilizar_produto_menu(self):
-        """Indisponibilizar produto via menu de contexto"""
-        selecao = self.tree_busca.selection()
-        if not selecao: return
-        id_prod = self.tree_busca.item(selecao)["values"][0]
-        
-        if messagebox.askyesno("Confirmar", "Deseja indisponibilizar este produto?"):
-            try:
-                database.atualizar_produto(id_prod, status_item="Indisponível")
-                messagebox.showinfo("Sucesso", "Produto indisponibilizado!")
-                self.atualizar_tree_busca()
-                if hasattr(self.master, "exibir_produtos"):
-                    self.master.exibir_produtos()
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao indisponibilizar produto: {str(e)}")
-
-    def restaurar_produto_menu(self):
-        """Restaurar produto via menu de contexto"""
-        selecao = self.tree_busca.selection()
-        if not selecao: return
-        id_prod = self.tree_busca.item(selecao)["values"][0]
-        
-        # Buscar status atual
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status_item FROM produtos WHERE id=?", (id_prod,))
-            status_atual = cursor.fetchone()[0]
-        
-        # Definir status anterior baseado no atual
-        if status_atual == "Indisponível":
-            novo_status = "Disponível"
-        elif status_atual == "Esgotado":
-            novo_status = "Disponível"
-        else:
-            messagebox.showinfo("Info", "Não há status anterior para restaurar.")
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Restaurar produto para '{novo_status}'?"):
-            try:
-                database.atualizar_produto(id_prod, status_item=novo_status)
-                messagebox.showinfo("Sucesso", "Produto restaurado!")
-                self.atualizar_tree_busca()
-                if hasattr(self.master, "exibir_produtos"):
-                    self.master.exibir_produtos()
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao restaurar produto: {str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()

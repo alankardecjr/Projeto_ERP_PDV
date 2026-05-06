@@ -7,7 +7,7 @@ import ui_utils
 class SistemaAleSapatilhas:
     def __init__(self, root):
         self.root = root
-        self.root.title("Alê Sapatilhas - Gestão Integrada")
+        self.root.title("Alê Sapatilhas - Gestão Integrada v4.0")
         
         # --- Aplicar dimensões maximizadas ---
         ui_utils.calcular_dimensoes_janela(self.root, maximizar=True)
@@ -165,15 +165,14 @@ class SistemaAleSapatilhas:
     # --- Janelas (Imports Lazy para evitar erros de circularidade) ---
     def abrir_cadastro_vendas(self):
         selection = self.tree.selection()
-        cliente_selecionado = None
-        
         if self.modo_atual == "clientes" and selection:
             valores = self.tree.item(selection, "values")
-            cliente_selecionado = (valores[0], valores[1], valores[3])  # (id, nome, telefone)
-        
-        from cadastro_vendas import JanelaCadastroVendas
-        JanelaCadastroVendas(self.root, cliente_selecionado)
-        self.exibir_vendas()
+            from cadastro_vendas import JanelaCadastroVendas
+            JanelaCadastroVendas(self.root, cliente_id=valores[0], nome_cliente=valores[1])
+            self.exibir_vendas()
+        else:
+            messagebox.showwarning("Atenção", "Selecione um CLIENTE na lista para iniciar a venda.")
+            self.exibir_clientes()
 
     def abrir_cadastro_despesas(self):
         from cadastro_despesas import JanelaCadastroDespesas
@@ -221,33 +220,11 @@ class SistemaAleSapatilhas:
         if item:
             self.tree.selection_set(item)
             menu = tk.Menu(self.root, tearoff=0)
-            
-            if self.modo_atual == "clientes":
-                menu.add_command(label="Editar", command=self.editar_selecionado)
-                menu.add_command(label="Bloquear", command=self.bloquear_cliente)
-                menu.add_command(label="Restaurar", command=self.restaurar_cliente)
-                menu.add_separator()
-                menu.add_command(label="Sair", command=lambda: None)
-                
-            elif self.modo_atual == "produtos":
-                menu.add_command(label="Editar", command=self.editar_selecionado)
-                menu.add_command(label="Indisponibilizar", command=self.indisponibilizar_produto)
-                menu.add_command(label="Restaurar", command=self.restaurar_produto)
-                menu.add_separator()
-                menu.add_command(label="Sair", command=lambda: None)
-                
+            if self.modo_atual in ["clientes", "produtos"]:
+                menu.add_command(label="📝 Editar", command=self.editar_selecionado)
+                menu.add_command(label="🚫 Desativar/Excluir", command=self.excluir_logico)
             elif self.modo_atual == "financeiro":
-                menu.add_command(label="Editar", command=self.editar_despesa)
-                menu.add_command(label="Quitar", command=self.quitar_selecionado)
-                menu.add_command(label="Restaurar", command=self.restaurar_despesa)
-                menu.add_separator()
-                menu.add_command(label="Sair", command=lambda: None)
-                
-            elif self.modo_atual == "vendas":
-                menu.add_command(label="Editar Venda", command=self.editar_venda)
-                menu.add_separator()
-                menu.add_command(label="Sair", command=lambda: None)
-                
+                menu.add_command(label="✅ Quitar Título", command=self.quitar_selecionado)
             menu.post(event.x_root, event.y_root)
 
     def excluir_logico(self):
@@ -282,116 +259,6 @@ class SistemaAleSapatilhas:
                 valores = self.tree.item(item)['values']
                 if not any(termo in str(v).lower() for v in valores):
                     self.tree.detach(item)
-
-    # --- Funções do menu de contexto ---
-    def bloquear_cliente(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = self.tree.item(item, "values")[0]
-        
-        if messagebox.askyesno("Confirmar", "Deseja bloquear este cliente?"):
-            database.atualizar_cliente(id_banco, status_cliente='Bloqueado')
-            self.exibir_clientes()
-
-    def restaurar_cliente(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = self.tree.item(item, "values")[0]
-        
-        # Buscar status atual
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status_cliente FROM clientes WHERE id=?", (id_banco,))
-            status_atual = cursor.fetchone()[0]
-        
-        # Definir status anterior
-        if status_atual == "Bloqueado":
-            novo_status = "Ativo"
-        elif status_atual == "Inativo":
-            novo_status = "Ativo"
-        else:
-            messagebox.showinfo("Info", "Cliente já está ativo.")
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Restaurar cliente para '{novo_status}'?"):
-            database.atualizar_cliente(id_banco, status_cliente=novo_status)
-            self.exibir_clientes()
-
-    def indisponibilizar_produto(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = self.tree.item(item, "values")[0]
-        
-        if messagebox.askyesno("Confirmar", "Deseja indisponibilizar este produto?"):
-            database.atualizar_produto(id_banco, status_item='Indisponível')
-            self.exibir_produtos()
-
-    def restaurar_produto(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = self.tree.item(item, "values")[0]
-        
-        # Buscar status atual
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status_item FROM produtos WHERE id=?", (id_banco,))
-            status_atual = cursor.fetchone()[0]
-        
-        # Definir status anterior
-        if status_atual == "Indisponível":
-            novo_status = "Disponível"
-        elif status_atual == "Esgotado":
-            novo_status = "Disponível"
-        else:
-            messagebox.showinfo("Info", "Produto já está disponível.")
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Restaurar produto para '{novo_status}'?"):
-            database.atualizar_produto(id_banco, status_item=novo_status)
-            self.exibir_produtos()
-
-    def editar_despesa(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = self.tree.item(item, "values")[0]
-        
-        from cadastro_despesas import JanelaCadastroDespesas
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM financeiro WHERE id=?", (id_banco,))
-            dados = cursor.fetchone()
-            if dados:
-                JanelaCadastroDespesas(self.root, dados_despesa=dados)
-                self.exibir_financeiro()
-
-    def restaurar_despesa(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = self.tree.item(item, "values")[0]
-        
-        # Buscar status atual
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status FROM financeiro WHERE id=?", (id_banco,))
-            status_atual = cursor.fetchone()[0]
-        
-        # Definir status anterior
-        if status_atual == "Pago":
-            novo_status = "Pendente"
-        elif status_atual == "Cancelado":
-            novo_status = "Pendente"
-        elif status_atual == "Atrasado":
-            novo_status = "Pendente"
-        else:
-            messagebox.showinfo("Info", "Despesa já está pendente.")
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Restaurar despesa para '{novo_status}'?"):
-            database.atualizar_financeiro(id_banco, status=novo_status)
-            self.exibir_financeiro()
-
-    def editar_venda(self):
-        messagebox.showinfo("Editar Venda", "Funcionalidade de edição de vendas será implementada em breve!")
 
     def confirmar_saida(self):
         if messagebox.askyesno("Sair", "Deseja encerrar o sistema Ale Sapatilhas?"):
