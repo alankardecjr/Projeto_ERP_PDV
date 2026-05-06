@@ -98,7 +98,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
                      font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(2, 0), padx=5)
             ent = tk.Entry(parent, font=("Segoe UI", 9), bg=self.bg_card, fg=self.cor_texto,
                             relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=2, padx=5)
+            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=2, padx=(5, 10) if col < 2 else 5)
             aplicar_estilo_foco(ent)
             return ent
 
@@ -111,6 +111,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.ent_busca_interna = tk.Entry(main_frame, font=("Segoe UI", 9), bg=self.bg_card, relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
         self.ent_busca_interna.grid(row=2, column=0, columnspan=3, sticky="ew", padx=5, ipady=3, pady=5)
         self.ent_busca_interna.bind("<KeyRelease>", self.filtrar_busca_interna)
+        self.ent_busca_interna.bind("<Enter>", lambda e: self.ent_busca_interna.focus_set())
         
         self.tree_busca = ttk.Treeview(main_frame, columns=("id", "ent", "desc", "valor"), show="headings", height=2, style="Busca.Treeview")
         self.tree_busca.heading("id", text="ID"); self.tree_busca.heading("ent", text="FORNECEDOR")
@@ -248,12 +249,11 @@ class JanelaCadastroDespesas(tk.Toplevel):
 
         try:
             if self.despesa_id:
-                database.atualizar_financeiro(self.despesa_id, entidade_nome=d["ent"], descricao=d["desc"], valor=d["val"], data_vencimento=d["venc"], forma_pagamento=d["forma"], categoria=d["cat"], status=d["status"])
+                database.atualizar_despesa(self.despesa_id, entidade_nome=d["ent"], descricao=d["desc"], valor=d["val"], data_vencimento=d["venc"], forma_pagamento=d["forma"], categoria=d["cat"], status=d["status"])
                 messagebox.showinfo("Sucesso", "Despesa atualizada!")
             else:
                 parc = int(self.ent_qtd_parc.get()) if self.cb_recorrencia.get() == "Parcelar" else 1
-                database.lancar_despesa(d["desc"], float(d["val"]), d["cat"], d["venc"], parc)
-                # Nota: Adicionar entidade_nome na sua função database.lancar_despesa se necessário
+                database.cadastrar_despesa(d["ent"], d["desc"], d["cat"], float(d["val"]), self.cb_recorrencia.get(), d["venc"], d["forma"], d["status"], parc)
                 messagebox.showinfo("Sucesso", "Nova despesa cadastrada!")
             
             if hasattr(self.master, "exibir_financeiro"): self.master.exibir_financeiro()

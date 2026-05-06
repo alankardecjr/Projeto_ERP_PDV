@@ -50,7 +50,7 @@ class SistemaAleSapatilhas:
         botoes = [
             ("➕ LANÇAR VENDA", self.abrir_cadastro_vendas, "vendas"),
             ("📑 LISTAR VENDAS", self.exibir_vendas, "vendas"),
-            ("💸 LANÇAR FINANCEIRO", self.abrir_cadastro_despesas, "financeiro"), 
+            ("💸 LANÇAR DESPESAS", self.abrir_cadastro_despesas, "financeiro"), 
             ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
             ("👤 CADASTRAR CLIENTE", self.abrir_cadastro_cliente, "clientes"),
             ("👥 LISTAR CLIENTES", self.exibir_clientes, "clientes"),

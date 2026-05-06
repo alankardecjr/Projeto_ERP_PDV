@@ -235,7 +235,8 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.tree_busca.bind("<Button-3>", self.menu_contexto_produto)
 
         self.atualizar_tree_busca()
-        self.gerar_sku_automatico()  # Gerar SKU inicial
+        if not self.produto_id:  # Só gera SKU automático para novos produtos
+            self.gerar_sku_automatico()
 
     def calcular_markup(self, event=None):
         try:

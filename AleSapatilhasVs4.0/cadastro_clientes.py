@@ -25,118 +25,104 @@ class JanelaCadastroClientes(tk.Toplevel):
         self.title("Alê Sapatilhas - Gestão de Clientes")
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
-        
-        # --- Aplicar dimensões padrão (600px largura) ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=700)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=720)
 
-        # DEFINIÇÃO DO ID: Importante definir antes de criar os widgets
         self.cliente_id = dados_cliente[0] if dados_cliente else None
+        self.texto_btn = "ATUALIZAR CADASTRO" if self.cliente_id else "SALVAR CADASTRO"
+        self.cor_base_acao = self.cor_hover_field if self.cliente_id else self.cor_btn_acao
         
         self.criar_widgets()
-        
         if dados_cliente:
             self.preencher_dados(dados_cliente)
-     
         self.grab_set()
 
+    def _aplicar_estilo_foco(self, ent):
+        def on_enter(e):
+            if self.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
+        def on_leave(e):
+            if self.focus_get() != ent: ent.config(highlightbackground=self.cor_borda)
+        def on_focus_in(e): ent.config(highlightbackground=self.cor_destaque, highlightthickness=2)
+        def on_focus_out(e): ent.config(highlightbackground=self.cor_borda, highlightthickness=1)
+        ent.bind("<Enter>", on_enter); ent.bind("<Leave>", on_leave)
+        ent.bind("<FocusIn>", on_focus_in); ent.bind("<FocusOut>", on_focus_out)
+
+    def _criar_campo(self, parent, texto, row, col=0, colspan=2):
+        tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, 
+                 font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(3, 0)) 
+        ent = tk.Entry(parent, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto,
+                        relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
+        ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=3, padx=(0, 5) if colspan==1 else 0)
+        self._aplicar_estilo_foco(ent)
+        return ent
+
+    def _criar_botao_padrao(self, parent, texto, cor, comando, row, col, colspan=1, padx=0):
+        btn = tk.Button(parent, text=texto, bg=cor, fg="white", font=("Segoe UI", 10, "bold"),
+                        relief="flat", cursor="hand2", command=comando)
+        btn.grid(row=row, column=col, columnspan=colspan, sticky="ew", padx=padx, ipady=6)
+        btn.bind("<Enter>", lambda e: btn.config(bg=self.cor_hover_btn))
+        btn.bind("<Leave>", lambda e: btn.config(bg=cor))
+        return btn
+
     def criar_widgets(self):
-        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=21, pady=10)
+        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=25, pady=10)
         main_frame.pack(fill="both", expand=True)
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=1)
-
-        # --- Funções Auxiliares de Estilo ---
-        def aplicar_estilo_foco(ent):
-            def on_enter(e):
-                if self.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
-            def on_leave(e):
-                if self.focus_get() != ent: ent.config(highlightbackground=self.cor_borda)
-            def on_focus_in(e): ent.config(highlightbackground=self.cor_destaque, highlightthickness=2)
-            def on_focus_out(e): ent.config(highlightbackground=self.cor_borda, highlightthickness=1)
-            ent.bind("<Enter>", on_enter)
-            ent.bind("<Leave>", on_leave)
-            ent.bind("<FocusIn>", on_focus_in)
-            ent.bind("<FocusOut>", on_focus_out)
-
-        def criar_campo(parent, texto, row, col=0, colspan=2):
-            tk.Label(parent, text=texto, bg=self.bg_fundo, fg=self.cor_lbl, 
-                     font=("Segoe UI", 8, "bold")).grid(row=row, column=col, sticky="w", pady=(3, 0)) 
-            ent = tk.Entry(parent, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto,
-                            relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-            ent.grid(row=row+1, column=col, columnspan=colspan, sticky="ew", ipady=3, padx=(0, 5) if colspan==1 else 0)
-            aplicar_estilo_foco(ent)
-            return ent
+        main_frame.columnconfigure((0, 1), weight=1)
 
         # --- Título ---
-        tk.Label(main_frame, text="Ficha Cadastral do Cliente", bg=self.bg_fundo, 
-                 fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        tk.Label(main_frame, text="Ficha Cadastro do Cliente", bg=self.bg_fundo, 
+                 fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
-        # --- Campos ---
-        self.ent_nome   = criar_campo(main_frame, "NOME COMPLETO*", 1)
-        self.ent_cpf    = criar_campo(main_frame, "CPF (APENAS NÚMEROS)*", 3)
-        self.ent_tel    = criar_campo(main_frame, "TELEFONE / WHATSAPP*", 5, col=0, colspan=1)
-        self.ent_email  = criar_campo(main_frame, "E-MAIL", 5, col=1, colspan=1)
-        self.ent_niver  = criar_campo(main_frame, "ANIVERSÁRIO (DD/MM)", 7, col=0, colspan=1)
-        self.ent_tam    = criar_campo(main_frame, "TAM. CALÇADO", 7, col=1, colspan=1)
-        self.ent_logra  = criar_campo(main_frame, "ENDEREÇO COMPLETO", 9)
-        self.ent_bairro = criar_campo(main_frame, "BAIRRO", 11, col=0, colspan=1)
-        self.ent_cidade = criar_campo(main_frame, "CIDADE", 11, col=1, colspan=1)
-        self.ent_cep    = criar_campo(main_frame, "CEP", 13, col=0, colspan=1)       
+        # --- Campos de Entrada ---
+        self.ent_nome   = self._criar_campo(main_frame, "NOME COMPLETO*", 1)
+        self.ent_cpf    = self._criar_campo(main_frame, "CPF (APENAS NÚMEROS)*", 3)
+        self.ent_tel    = self._criar_campo(main_frame, "TELEFONE / WHATSAPP*", 5, col=0, colspan=1)
+        self.ent_email  = self._criar_campo(main_frame, "E-MAIL", 5, col=1, colspan=1)
+        self.ent_niver  = self._criar_campo(main_frame, "ANIVERSÁRIO (DD/MM)", 7, col=0, colspan=1)
+        self.ent_tam    = self._criar_campo(main_frame, "TAM. CALÇADO", 7, col=1, colspan=1)
+        self.ent_logra  = self._criar_campo(main_frame, "ENDEREÇO COMPLETO", 9)
+        self.ent_bairro = self._criar_campo(main_frame, "BAIRRO", 11, col=0, colspan=1)
+        self.ent_cidade = self._criar_campo(main_frame, "CIDADE", 11, col=1, colspan=1)
+        self.ent_cep    = self._criar_campo(main_frame, "CEP", 13, col=0, colspan=1)       
         
+        # Campo Limite (Manual por ser específico)
         tk.Label(main_frame, text="LIMITE DE CRÉDITO", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=13, column=1, sticky="w", pady=(4,0))
         self.ent_limite = tk.Entry(main_frame, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
         self.ent_limite.grid(row=14, column=1, sticky="ew", ipady=2)
         self.ent_limite.insert(0, "0.00")
-        aplicar_estilo_foco(self.ent_limite)
+        self._aplicar_estilo_foco(self.ent_limite)
 
-        self.ent_obs = criar_campo(main_frame, "OBSERVAÇÕES", 15)
+        self.ent_obs = self._criar_campo(main_frame, "OBSERVAÇÕES", 15)
 
-        tk.Label(main_frame, text="CLASSIFICAÇÃO", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=17, column=0, sticky="w", pady=(8, 0))
-        
+        # Status
+        tk.Label(main_frame, text="CLASSIFICAÇÃO", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=17, column=0, sticky="w", pady=(8, 0))
         self.var_status = tk.StringVar(value="Ativo")
         self.opt_status = tk.OptionMenu(main_frame, self.var_status, "Vip", "Ativo", "Inativo", "Bloqueado")
-        self.opt_status.config(bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, 
-                                highlightbackground=self.cor_borda, font=("Segoe UI", 10), cursor="hand2")
-        self.opt_status.grid(row=18, column=0, columnspan=2, sticky="ew", pady=(2, 0))
+        self.opt_status.config(bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, highlightbackground=self.cor_borda, font=("Segoe UI", 10), cursor="hand2")
+        self.opt_status.grid(row=18, column=0, columnspan=2, sticky="ew", pady=(2, 15))
 
-        # --- Botões com Lógica de Cor de Cadastro/Atualização ---
-        self.texto_btn = "ATUALIZAR CADASTRO" if self.cliente_id else "SALVAR CADASTRO"
-        self.cor_base_acao = self.cor_hover_field if self.cliente_id else self.cor_btn_acao
+        # --- SEÇÃO DE BOTÕES (Refatorada) ---
+        # Frame Superior: Salvar e Gerar Venda
+        frame_botoes_sup = tk.Frame(main_frame, bg=self.bg_fundo)
+        frame_botoes_sup.grid(row=19, column=0, columnspan=2, sticky="ew")
+        frame_botoes_sup.columnconfigure((0, 1), weight=1)
 
-        frame_botoes_superior = tk.Frame(main_frame, bg=self.bg_fundo)
-        frame_botoes_superior.grid(row=19, column=0, columnspan=2, pady=(10, 0), sticky="ew")
-        frame_botoes_superior.columnconfigure(0, weight=3)
-        frame_botoes_superior.columnconfigure(1, weight=3)
-        frame_botoes_superior.columnconfigure(2, weight=1)
-
-        self.btn_salvar = tk.Button(frame_botoes_superior, text=self.texto_btn, bg=self.cor_base_acao, fg="white", 
-                                    font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
-                                    command=self.salvar_dados)
-        self.btn_salvar.grid(row=0, column=0, sticky="ew", padx=(0, 10), ipady=6)
+        self.btn_salvar = self._criar_botao_padrao(frame_botoes_sup, self.texto_btn, self.cor_base_acao, 
+                                                   self.salvar_dados, 0, 0, padx=(0, 5))
         
-        self.btn_gerar_venda = tk.Button(frame_botoes_superior, text="🛒 GERAR VENDA", bg=self.cor_destaque, fg="white", 
-                                         font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
-                                         command=self.gerar_venda)
-        self.btn_gerar_venda.grid(row=0, column=1, sticky="ew", padx=(0, 10), ipady=6)
+        self.btn_gerar_venda = self._criar_botao_padrao(frame_botoes_sup, "🛒 GERAR VENDA", self.cor_destaque, 
+                                                        self.gerar_venda, 0, 1, padx=(5, 0))
 
-        self.btn_cancelar = tk.Button(frame_botoes_superior, text="CANCELAR", bg=self.cor_btn_sair, fg="white", 
-                                      font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
-                                      command=self.destroy)
-        self.btn_cancelar.grid(row=0, column=2, sticky="ew", ipady=6)
+        # Frame Inferior: Cancelar (Ocupa tudo embaixo)
+        frame_botoes_inf = tk.Frame(main_frame, bg=self.bg_fundo)
+        frame_botoes_inf.grid(row=20, column=0, columnspan=2, pady=(10, 0), sticky="ew")
+        frame_botoes_inf.columnconfigure(0, weight=1)
 
-        # --- Hovers ---
-        self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
-        self.btn_salvar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_base_acao))
-        
-        self.btn_gerar_venda.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
-        self.btn_gerar_venda.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_destaque))
-        
-        self.btn_cancelar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
-        self.btn_cancelar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_btn_sair))
+        self.btn_cancelar = self._criar_botao_padrao(frame_botoes_inf, "CANCELAR", self.cor_btn_sair, 
+                                                     self.destroy, 0, 0)
 
-    def salvar_dados(self):
-        d = {
+    def get_dados_campos(self):
+        """Retorna um dicionário com os dados da tela limpos"""
+        return {
             "nome": self.ent_nome.get().strip(),
             "cpf": self.ent_cpf.get().strip(),
             "tel": self.ent_tel.get().strip(),
@@ -151,127 +137,60 @@ class JanelaCadastroClientes(tk.Toplevel):
             "limite": self.ent_limite.get().strip() or 0,
             "status": self.var_status.get()
         }
-        
+
+    def salvar_dados(self):
+        d = self.get_dados_campos()
         if not d["nome"] or not d["cpf"] or not d["tel"]:
             messagebox.showwarning("Atenção", "Preencha os campos obrigatórios (Nome, CPF e Telefone).")
             return
 
         try:
             if self.cliente_id:
-                database.atualizar_cliente(
-                    self.cliente_id, 
-                    nome=d["nome"], cpf=d["cpf"], telefone=d["tel"], email=d["email"],
-                    aniversario=d["niver"], tamanho_calcado=d["tam"], 
-                    endereco_completo=d["endereco"], bairro=d["bairro"],
-                    cidade=d["cidade"], cep=d["cep"], observacao=d["obs"],
-                    limite_credito=d["limite"], status_cliente=d["status"]
-                )
+                database.atualizar_cliente(self.cliente_id, **d)
                 messagebox.showinfo("Sucesso", "Cadastro atualizado!")
             else:
-                database.cadastrar_cliente(
-                    d["nome"], d["cpf"], d["tel"], d["email"],
-                    d["niver"], d["tam"], d["endereco"], d["bairro"],
-                    d["cidade"], d["cep"], d["obs"], d["limite"]
-                )
+                database.cadastrar_cliente(**d)
                 messagebox.showinfo("Sucesso", "Cliente cadastrado!")
             
-            # Tenta atualizar a lista na tela principal se o método existir
             if hasattr(self.master, "exibir_clientes"):
                 self.master.exibir_clientes()
-                
             self.destroy()
         except Exception as e:
             messagebox.showerror("Erro", f"Falha ao salvar: {e}")
 
+    def gerar_venda(self):
+        d = self.get_dados_campos()
+        if not d["nome"]:
+            messagebox.showwarning("Atenção", "Preencha pelo menos o nome para gerar venda.")
+            return
+
+        try:
+            # Lógica para salvar antes de vender
+            if self.cliente_id:
+                database.atualizar_cliente(self.cliente_id, **d)
+                cid = self.cliente_id
+            else:
+                cid = database.cadastrar_cliente(**d)
+            
+            self.destroy()
+            from cadastro_vendas import JanelaCadastroVendas
+            JanelaCadastroVendas(self.master, cliente_selecionado=(cid, d["nome"], d["tel"]))
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao processar: {e}")
+
     def preencher_dados(self, d):
-        """Preenche os campos e ajusta o botão para o modo Edição"""
-        self.cliente_id = d[0]
-        self.ent_nome.insert(0, d[1])
-        self.ent_cpf.insert(0, d[2] if d[2] else "")
-        self.ent_tel.insert(0, d[3])
-        self.ent_email.insert(0, d[4] if d[4] else "")
-        self.ent_niver.insert(0, d[5] if d[5] else "")
-        self.ent_tam.insert(0, d[6] if d[6] else "")
-        self.ent_logra.insert(0, d[7] if d[7] else "")
-        self.ent_bairro.insert(0, d[8] if d[8] else "")
-        self.ent_cidade.insert(0, d[9] if d[9] else "")
-        self.ent_cep.insert(0, d[10] if d[10] else "")
-        self.ent_obs.insert(0, d[11] if d[11] else "")
+        mapping = [
+            (self.ent_nome, d[1]), (self.ent_cpf, d[2]), (self.ent_tel, d[3]),
+            (self.ent_email, d[4]), (self.ent_niver, d[5]), (self.ent_tam, d[6]),
+            (self.ent_logra, d[7]), (self.ent_bairro, d[8]), (self.ent_cidade, d[9]),
+            (self.ent_cep, d[10]), (self.ent_obs, d[11])
+        ]
+        for widget, valor in mapping:
+            widget.insert(0, valor if valor else "")
+        
         self.ent_limite.delete(0, "end")
         self.ent_limite.insert(0, d[12] if d[12] else "0.00")
         self.var_status.set(d[14] if len(d) > 14 else "Ativo")
-
-        # Atualiza o botão para o padrão de edição (Roxo)
-        self.cor_base_acao = self.cor_hover_field
-        self.btn_salvar.config(text="ATUALIZAR CADASTRO", bg=self.cor_base_acao)
-
-    def editar_cliente_menu(self):
-        """Editar cliente via menu de contexto (placeholder)"""
-        messagebox.showinfo("Editar", "Função será implementada no menu principal")
-
-    def bloquear_cliente_menu(self):
-        """Bloquear cliente via menu de contexto (placeholder)"""
-        messagebox.showinfo("Bloquear", "Função será implementada no menu principal")
-
-    def gerar_venda(self):
-        """Salva o cadastro do cliente e abre o PDV com cliente pré-selecionado"""
-        # Primeiro salva o cadastro se houver dados
-        if self.ent_nome.get().strip():
-            try:
-                # Salva ou atualiza o cliente
-                d = {
-                    "nome": self.ent_nome.get().strip(),
-                    "cpf": self.ent_cpf.get().strip(),
-                    "tel": self.ent_tel.get().strip(),
-                    "email": self.ent_email.get().strip(),
-                    "niver": self.ent_niver.get().strip(),
-                    "tam": self.ent_tam.get().strip() or 0,
-                    "endereco": self.ent_logra.get().strip(),
-                    "bairro": self.ent_bairro.get().strip(),
-                    "cidade": self.ent_cidade.get().strip(),
-                    "cep": self.ent_cep.get().strip(),
-                    "obs": self.ent_obs.get().strip(),
-                    "limite": self.ent_limite.get().strip() or 0,
-                    "status": self.var_status.get()
-                }
-                
-                if not d["nome"] or not d["cpf"] or not d["tel"]:
-                    messagebox.showwarning("Atenção", "Preencha pelo menos Nome, CPF e Telefone para gerar venda.")
-                    return
-
-                if self.cliente_id:
-                    database.atualizar_cliente(
-                        self.cliente_id, 
-                        nome=d["nome"], cpf=d["cpf"], telefone=d["tel"], email=d["email"],
-                        aniversario=d["niver"], tamanho_calcado=d["tam"], 
-                        endereco_completo=d["endereco"], bairro=d["bairro"],
-                        cidade=d["cidade"], cep=d["cep"], observacao=d["obs"],
-                        limite_credito=d["limite"], status_cliente=d["status"]
-                    )
-                    cliente_id_atual = self.cliente_id
-                else:
-                    cliente_id_atual = database.cadastrar_cliente(
-                        d["nome"], d["cpf"], d["tel"], d["email"],
-                        d["niver"], d["tam"], d["endereco"], d["bairro"],
-                        d["cidade"], d["cep"], d["obs"], d["limite"]
-                    )
-                
-                # Fecha a janela atual
-                self.destroy()
-                
-                # Abre o PDV com cliente selecionado
-                from cadastro_vendas import JanelaCadastroVendas
-                cliente_dados = (cliente_id_atual, d["nome"], d["tel"])
-                JanelaCadastroVendas(self.master, cliente_selecionado=cliente_dados)
-                
-            except Exception as e:
-                messagebox.showerror("Erro", f"Falha ao salvar cliente: {e}")
-        else:
-            messagebox.showwarning("Atenção", "Preencha pelo menos o nome do cliente.")
-
-    def restaurar_cliente_menu(self):
-        """Restaurar cliente via menu de contexto (placeholder)"""
-        messagebox.showinfo("Restaurar", "Função será implementada no menu principal")
 
 if __name__ == "__main__":
     root = tk.Tk()
