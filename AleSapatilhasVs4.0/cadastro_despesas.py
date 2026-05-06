@@ -27,6 +27,8 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
         
+        self._manter_em_primeiro_plano()
+        
         # --- Aplicar dimensões padrão (600px largura, altura aumentada) ---
         ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=780)
         
@@ -56,6 +58,12 @@ class JanelaCadastroDespesas(tk.Toplevel):
         try:
             return datetime.strptime(data_str, "%d/%m/%Y").strftime("%Y-%m-%d")
         except: return None
+
+    def _manter_em_primeiro_plano(self):
+        try:
+            self.attributes("-topmost", True)
+        except Exception as e:
+            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}")
 
     def criar_widgets(self):
         wrapper = tk.Frame(self, bg=self.bg_fundo)
@@ -253,7 +261,10 @@ class JanelaCadastroDespesas(tk.Toplevel):
                 messagebox.showinfo("Sucesso", "Despesa atualizada!")
             else:
                 parc = int(self.ent_qtd_parc.get()) if self.cb_recorrencia.get() == "Parcelar" else 1
-                database.cadastrar_despesa(d["ent"], d["desc"], d["cat"], float(d["val"]), self.cb_recorrencia.get(), d["venc"], d["forma"], d["status"], parc)
+                sucesso, mensagem = database.cadastrar_despesa(d["ent"], d["desc"], d["cat"], float(d["val"]), self.cb_recorrencia.get(), d["venc"], d["forma"], d["status"], parc)
+                if not sucesso:
+                    messagebox.showerror("Erro", mensagem)
+                    return
                 messagebox.showinfo("Sucesso", "Nova despesa cadastrada!")
             
             if hasattr(self.master, "exibir_financeiro"): self.master.exibir_financeiro()
@@ -282,28 +293,32 @@ class JanelaCadastroDespesas(tk.Toplevel):
         # Verificar se é receita ou despesa
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT tipo FROM financeiro WHERE id=?", (id_item,))
-            tipo = cursor.fetchone()[0]
+            cursor.execute("SELECT tipo, venda_id FROM financeiro WHERE id=?", (id_item,))
+            result = cursor.fetchone()
+            if not result:
+                messagebox.showerror("Erro", "Registro financeiro não encontrado.")
+                return
+            tipo, venda_id = result
         
         if tipo == "Receita":
-            # Abrir cadastro de vendas para edição
+            if not venda_id:
+                messagebox.showerror("Erro", "Registro de receita sem venda vinculada.")
+                return
             from cadastro_vendas import JanelaCadastroVendas
-            # Buscar dados da venda
             with database.conectar() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    SELECT v.id, c.nome, c.telefone, GROUP_CONCAT(p.produto), v.total, v.forma_pagamento, v.parcelas, v.desconto, v.data_venda
+                    SELECT v.id, c.nome, c.telefone, GROUP_CONCAT(p.produto), v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
                     FROM vendas v
                     JOIN clientes c ON v.cliente_id = c.id
-                    JOIN vendas_itens vi ON v.id = vi.venda_id
+                    JOIN itens_venda vi ON v.id = vi.venda_id
                     JOIN produtos p ON vi.produto_id = p.id
                     WHERE v.id = ?
                     GROUP BY v.id
-                """, (id_item,))
+                """, (venda_id,))
                 dados_venda = cursor.fetchone()
-            
+
             if dados_venda:
-                # Criar dicionário com dados da venda para edição
                 dados_venda_dict = {
                     'id': dados_venda[0],
                     'cliente': f"{dados_venda[1]} - {dados_venda[2]}",
@@ -314,13 +329,18 @@ class JanelaCadastroDespesas(tk.Toplevel):
                     'desconto': dados_venda[7],
                     'data': dados_venda[8]
                 }
-                JanelaCadastroVendas(self, dados_venda=dados_venda_dict)
+                JanelaCadastroVendas(self.master, dados_venda=dados_venda_dict)
+            else:
+                messagebox.showinfo("Info", "Venda não encontrada para o registro selecionado.")
         else:
-            # Abrir cadastro de despesas para edição
             with database.conectar() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM financeiro WHERE id=?", (id_item,))
-                self.preencher_dados(cursor.fetchone())
+                dados = cursor.fetchone()
+                if dados:
+                    self.preencher_dados(dados)
+                else:
+                    messagebox.showerror("Erro", "Despesa não encontrada.")
 
     def menu_contexto(self, event):
         """Mostrar menu de contexto no botão direito"""

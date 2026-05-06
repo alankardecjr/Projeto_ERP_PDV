@@ -98,6 +98,10 @@ class JanelaPagamento(tk.Toplevel):
                                         state="readonly", font=("Segoe UI", 10))
         self.cb_parcelas.grid(row=1, column=1, sticky="ew")
 
+        # Configurar expansão das colunas
+        frame_pagamento.columnconfigure(0, weight=1)
+        frame_pagamento.columnconfigure(1, weight=1)
+
         # Desconto
         tk.Label(frame_pagamento, text="Desconto (R$):", bg=self.bg_card, fg=self.cor_lbl,
                  font=("Segoe UI", 9, "bold")).grid(row=2, column=0, sticky="w", pady=(10, 5))

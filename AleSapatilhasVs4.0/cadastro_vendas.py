@@ -6,8 +6,14 @@ from PIL import Image
 import os
 
 class JanelaCadastroVendas(tk.Toplevel):
-    def __init__(self, master, cliente_selecionado=None):
+    def __init__(self, master, cliente_selecionado=None, dados_venda=None):
         super().__init__(master)
+        self.dados_venda = dados_venda
+        if isinstance(self.dados_venda, tuple):
+            self.dados_venda = {
+                'id': self.dados_venda[0],
+                'cliente': f"Venda #{self.dados_venda[0]}"
+            }
 
         # --- Importar paleta de cores ---
         paleta = ui_utils.get_paleta()
@@ -30,6 +36,7 @@ class JanelaCadastroVendas(tk.Toplevel):
         
         # --- Aplicar dimensões ---
         ui_utils.calcular_dimensoes_janela(self, largura_desejada=1200, altura_desejada=750)
+        self._manter_em_primeiro_plano()
         
         self.cliente_selecionado = cliente_selecionado # (id, nome, tel) ou None
         self.carrinho = [] # [(id, produto, qtd, preco)]
@@ -40,6 +47,8 @@ class JanelaCadastroVendas(tk.Toplevel):
         # Se cliente foi passado, pré-selecionar
         if self.cliente_selecionado:
             self.lbl_info_cliente.config(text=f"✓ {self.cliente_selecionado[1]}", fg="green")
+        elif self.dados_venda is not None:
+            self.lbl_info_cliente.config(text=f"✓ {self.dados_venda.get('cliente', 'Venda')}", fg="green")
         
         self.grab_set()
 
@@ -118,7 +127,11 @@ class JanelaCadastroVendas(tk.Toplevel):
         self.btn_pagamento.pack(fill="x", ipady=15)
 
     # --- LÓGICA DO PDV ---
-
+    def _manter_em_primeiro_plano(self):
+        try:
+            self.attributes("-topmost", True)
+        except Exception as e:
+            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}")
     def carregar_produtos(self):
         self.produtos_db = database.listar_itens()
         # Formato: "ID - Produto (Cor) - Tam"

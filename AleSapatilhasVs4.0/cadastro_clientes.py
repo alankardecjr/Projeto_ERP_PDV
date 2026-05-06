@@ -26,8 +26,7 @@ class JanelaCadastroClientes(tk.Toplevel):
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
 
-        # MANTER EM PRIMEIRO PLANO
-        self.attributes("-topmost", True)
+        self._manter_em_primeiro_plano()
         
         ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=720)
 
@@ -153,7 +152,10 @@ class JanelaCadastroClientes(tk.Toplevel):
                 database.atualizar_cliente(self.cliente_id, **d)
                 messagebox.showinfo("Sucesso", "Cadastro atualizado!")
             else:
-                database.cadastrar_cliente(**d)
+                cid = database.cadastrar_cliente(**d)
+                if not cid:
+                    messagebox.showerror("Erro", "Não foi possível cadastrar o cliente. Verifique o CPF e tente novamente.")
+                    return
                 messagebox.showinfo("Sucesso", "Cliente cadastrado!")
             
             if hasattr(self.master, "exibir_clientes"):
@@ -175,12 +177,21 @@ class JanelaCadastroClientes(tk.Toplevel):
                 cid = self.cliente_id
             else:
                 cid = database.cadastrar_cliente(**d)
+                if not cid:
+                    messagebox.showerror("Erro", "Não foi possível cadastrar o cliente. Verifique CPF e tente novamente.")
+                    return
             
             self.destroy()
             from cadastro_vendas import JanelaCadastroVendas
             JanelaCadastroVendas(self.master, cliente_selecionado=(cid, d["nome"], d["tel"]))
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao processar: {e}")
+
+    def _manter_em_primeiro_plano(self):
+        try:
+            self.attributes("-topmost", True)
+        except Exception as e:
+            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}")
 
     def preencher_dados(self, d):
         mapping = [

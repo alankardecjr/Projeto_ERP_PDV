@@ -56,7 +56,8 @@ class SistemaAleSapatilhas:
             ("👥 LISTAR CLIENTES", self.exibir_clientes, "clientes"),
             ("📦 CADASTRAR PRODUTO", self.abrir_cadastro_produto, "produtos"),
             ("👠 LISTAR PRODUTOS", self.exibir_produtos, "produtos"),
-            ("📊 DASHBOARD", self.exibir_dashboard, None),
+            ("📊 DASHBOARD", self.exibir_dashboard, "dashboard"),
+            ("🔄 ATUALIZAR", self.atualizar_lista, None),
             ("", None, None), 
             ("🚪 SAIR", self.confirmar_saida, None)
         ]
@@ -74,7 +75,7 @@ class SistemaAleSapatilhas:
             
             # Armazenar referência se tem modo associado
             if modo:
-                self.botoes_menu[modo] = btn
+                self.botoes_menu.setdefault(modo, []).append(btn)
 
         # --- Container Principal para exibir conteúdo dinâmico ---
         self.container = tk.Frame(self.root, bg=self.bg_fundo, padx=20, pady=20)
@@ -121,9 +122,6 @@ class SistemaAleSapatilhas:
         # Focus no campo de busca
         self.ent_busca.bind("<Enter>", lambda e: self.ent_busca.focus())
         
-        # Dicionário para armazenar referências dos botões do menu
-        self.botoes_menu = {}
-        
         # Atualizar destaque do menu
         self.atualizar_destaque_menu()
 
@@ -137,11 +135,12 @@ class SistemaAleSapatilhas:
 
     def atualizar_destaque_menu(self):
         """Atualiza destaque visual do botão do menu ativo"""
-        for modo, btn in self.botoes_menu.items():
-            if modo == self.modo_atual:
-                btn.config(bg=self.cor_destaque, fg="white")
-            else:
-                btn.config(bg=self.cor_btn_menu, fg="white")
+        for modo, botoes in self.botoes_menu.items():
+            for btn in botoes:
+                if modo == self.modo_atual:
+                    btn.config(bg=self.cor_destaque, fg="white")
+                else:
+                    btn.config(bg=self.cor_btn_menu, fg="white")
 
     def focus_linha_mouse(self, event):
         """Define foco na linha onde o mouse está passando"""
@@ -162,36 +161,37 @@ class SistemaAleSapatilhas:
     def exibir_clientes(self):
         self.modo_atual = "clientes"
         self.lbl_titulo.config(text="👥 CADASTRO DE CLIENTES")
-        self.preparar_colunas(("id", "nome", "cpf", "telefone", "limite", "status"))    
+        self.preparar_colunas(("nome", "cpf", "telefone", "aniversario", "calcado", "limite", "status"))    
         for c in database.exibir_clientes():
-            # c[12] é limite_credito, c[14] é status_cliente
-            self.tree.insert("", "end", values=(c[0], c[1], c[2], c[3], f"R$ {c[12]:.2f}", c[14]))
+            # c[1]=nome, c[2]=cpf, c[3]=telefone, c[5]=aniversario, c[6]=calcado, c[12]=limite, c[14]=status
+            self.tree.insert("", "end", values=(c[1], c[2], c[3], c[5], c[6], f"R$ {c[12]:.2f}", c[14]))
 
     def exibir_produtos(self):
         self.modo_atual = "produtos"
         self.lbl_titulo.config(text="👠 ESTOQUE DE PRODUTOS")
         # Ajustado para bater com a ordem do database.exibir_produtos()
-        self.preparar_colunas(("id", "sku", "produto", "cor", "tamanho", "estoque", "preço", "status"))
+        self.preparar_colunas(("sku", "produto", "cor", "tamanho", "estoque", "preço", "fornecedor", "status"))
         for i in database.exibir_produtos():
-            # i[7] é quantidade, i[6] é precovenda, i[11] é status_item
-            self.tree.insert("", "end", values=(i[0], i[1], i[2], i[3], i[4], i[7], f"R$ {i[6]:.2f}", i[11]))
+            # i[1]=sku, i[2]=produto, i[3]=cor, i[4]=tamanho, i[7]=quantidade, i[6]=precovenda, i[10]=fornecedor, i[11]=status_item
+            self.tree.insert("", "end", values=(i[1], i[2], i[3], i[4], i[7], f"R$ {i[6]:.2f}", i[10], i[11]))
 
     def exibir_vendas(self):
         self.modo_atual = "vendas"
         self.lbl_titulo.config(text="📑 HISTÓRICO DE VENDAS")
-        self.preparar_colunas(("id", "cliente", "total", "forma", "data", "status"))
+        self.preparar_colunas(("cliente", "total", "forma", "data", "status"))
         for v in database.relatorio_vendas_geral():
-            self.tree.insert("", "end", values=(v[0], v[1], f"R$ {v[2]:.2f}", v[3], v[5], v[7]))
+            self.tree.insert("", "end", values=(v[1], f"R$ {v[2]:.2f}", v[3], v[5], v[7]))
 
     def exibir_financeiro(self):
         self.modo_atual = "financeiro"
-        self.lbl_titulo.config(text="📉 FLUXO DE CAIXA")
-        self.preparar_colunas(("id", "tipo", "entidade", "descrição", "valor", "vencimento", "status"))
+        self.lbl_titulo.config(text="� FLUXO DE CAIXA")
+        self.preparar_colunas(("tipo", "Fornecedor", "descrição", "parcelas", "valor", "vencimento", "pagamento", "forma", "categoria", "recorrencia", "status"))
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, tipo, entidade_nome, descricao, valor, data_vencimento, status FROM financeiro ORDER BY data_vencimento DESC")
+            cursor.execute("SELECT tipo, entidade_nome, descricao,total_parcelas, valor, data_vencimento, data_pagamento, forma_pagamento, categoria, status FROM financeiro ORDER BY data_vencimento DESC")
             for f in cursor.fetchall():
-                self.tree.insert("", "end", values=(f[0], f[1], f[2], f[3], f"R$ {f[4]:.2f}", f[5], f[6]))
+                recorrencia = "Sim" if f[3] > 1 else "Não"
+                self.tree.insert("", "end", values=(f[0], f[1], f[2], f[3], f"R$ {f[4]:.2f}", f[5], f[6], f[7], f[8], recorrencia, f[9]))
 
     def exibir_dashboard(self):
         res = database.dashboard_resumo()
@@ -255,6 +255,12 @@ class SistemaAleSapatilhas:
                 if dados: 
                     JanelaCadastroProdutos(self.root, dados_produto=dados)
                     self.exibir_produtos()
+
+        elif self.modo_atual == "financeiro":
+            self.editar_despesa()
+
+        elif self.modo_atual == "vendas":
+            self.editar_venda()
 
     # --- Função para mostrar menu de contexto ---
     def mostrar_menu_contexto(self, event):
@@ -392,6 +398,18 @@ class SistemaAleSapatilhas:
             database.atualizar_produto(id_banco, status_item=novo_status)
             self.exibir_produtos()
 
+    def atualizar_lista(self):
+        if self.modo_atual == "clientes":
+            self.exibir_clientes()
+        elif self.modo_atual == "produtos":
+            self.exibir_produtos()
+        elif self.modo_atual == "financeiro":
+            self.exibir_financeiro()
+        elif self.modo_atual == "vendas":
+            self.exibir_vendas()
+        elif self.modo_atual == "dashboard":
+            self.exibir_dashboard()
+
     def editar_despesa(self):
         item = self.tree.selection()
         if not item: return
@@ -440,10 +458,24 @@ class SistemaAleSapatilhas:
         from cadastro_vendas import JanelaCadastroVendas
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM vendas WHERE id=?", (id_banco,))
+            cursor.execute("""
+                SELECT v.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
+                FROM vendas v
+                JOIN clientes c ON v.cliente_id = c.id
+                WHERE v.id = ?
+            """, (id_banco,))
             dados = cursor.fetchone()
             if dados:
-                JanelaCadastroVendas(self.root, dados_venda=dados)
+                dados_venda = {
+                    'id': dados[0],
+                    'cliente': f"{dados[1]} - {dados[2]}",
+                    'total': dados[3],
+                    'forma': dados[4],
+                    'parcelas': dados[5],
+                    'desconto': dados[6],
+                    'data': dados[7]
+                }
+                JanelaCadastroVendas(self.root, dados_venda=dados_venda)
                 self.exibir_vendas()
 
     def visualizar_venda(self):

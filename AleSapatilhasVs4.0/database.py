@@ -160,7 +160,7 @@ def cadastrar_cliente(nome, cpf, tel, email, niver, tam, endereco, bairro, cidad
                 INSERT INTO clientes (nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (nome, cpf, tel, email, niver, tam, endereco, bairro, cidade, cep, obs, limite))
-            return True
+            return cursor.lastrowid
     except sqlite3.IntegrityError:
         return False
 
@@ -179,6 +179,29 @@ def atualizar_cliente(cliente_id, **kwargs):
         valores = list(kwargs.values()) + [cliente_id]
         cursor.execute(f"UPDATE clientes SET {campos} WHERE id = ?", valores)
         conn.commit()
+
+# --- Funções de apoio para vendas e financeiro ---
+def atualizar_financeiro(financeiro_id, **kwargs):
+    with conectar() as conn:
+        cursor = conn.cursor()
+        campos = ", ".join(f"{k} = ?" for k in kwargs.keys())
+        valores = list(kwargs.values()) + [financeiro_id]
+        cursor.execute(f"UPDATE financeiro SET {campos} WHERE id = ?", valores)
+        conn.commit()
+
+
+def buscar_cliente_nome(termo):
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM clientes WHERE nome LIKE ? OR telefone LIKE ? LIMIT 1", (f"%{termo}%", f"%{termo}%"))
+        return cursor.fetchone()
+
+
+def listar_itens():
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item, foto FROM produtos WHERE status_item != 'Indisponível'")
+        return cursor.fetchall()
 
 # --- Movimentações e vendas ---
 def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, desconto=0):

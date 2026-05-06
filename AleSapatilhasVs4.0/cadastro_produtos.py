@@ -28,6 +28,8 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
         
+        self._manter_em_primeiro_plano()
+        
         # --- Aplicar dimensões padrão (600px largura, altura ajustada) ---
         ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=850)
 
@@ -301,10 +303,13 @@ class JanelaCadastroProdutos(tk.Toplevel):
                 )
                 messagebox.showinfo("Sucesso", "Produto atualizado!")
             else:
-                database.cadastrar_produto(
+                criado = database.cadastrar_produto(
                     d["sku"], d["produto"], d["cor"], d["tam"], 
                     d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"]
                 )
+                if not criado:
+                    messagebox.showerror("Erro", "Falha ao cadastrar produto. Verifique o SKU e tente novamente.")
+                    return
                 messagebox.showinfo("Sucesso", "Produto cadastrado!")
             
             if hasattr(self.master, "exibir_produtos"):
@@ -399,6 +404,12 @@ class JanelaCadastroProdutos(tk.Toplevel):
     def editar_produto_menu(self):
         """Editar produto via menu de contexto"""
         self.editar_produto_duplo_clique(None)
+
+    def _manter_em_primeiro_plano(self):
+        try:
+            self.attributes("-topmost", True)
+        except Exception as e:
+            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}")
 
     def indisponibilizar_produto_menu(self):
         """Indisponibilizar produto via menu de contexto"""
