@@ -210,8 +210,9 @@ class SistemaAleSapatilhas:
         cliente_selecionado = None
         
         if self.modo_atual == "clientes" and selection:
-            valores = self.tree.item(selection[0], "values")
-            cliente_selecionado = (valores[0], valores[1], valores[3])  # (id, nome, telefone)
+            item_id = selection[0]
+            valores = self.tree.item(item_id, "values")
+            cliente_selecionado = (item_id, valores[0], valores[2])  # (id, nome, telefone)
         
         from cadastro_vendas import JanelaCadastroVendas
         JanelaCadastroVendas(self.root, cliente_selecionado)
@@ -258,10 +259,58 @@ class SistemaAleSapatilhas:
                     self.exibir_produtos()
 
         elif self.modo_atual == "financeiro":
-            self.editar_despesa()
+            self.editar_financeiro_registro()
 
         elif self.modo_atual == "vendas":
             self.editar_venda()
+
+    def editar_financeiro_registro(self):
+        item = self.tree.selection()
+        if not item:
+            return
+        registro_id = item[0]
+
+        from cadastro_despesas import JanelaCadastroDespesas
+        from cadastro_vendas import JanelaCadastroVendas
+
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT tipo, venda_id FROM financeiro WHERE id = ?", (registro_id,))
+            result = cursor.fetchone()
+            if not result:
+                messagebox.showerror("Erro", "Registro financeiro não encontrado.", parent=self.root)
+                return
+
+            tipo, venda_id = result
+            if tipo == "Despesa":
+                cursor.execute("SELECT * FROM financeiro WHERE id = ?", (registro_id,))
+                dados = cursor.fetchone()
+                if dados:
+                    JanelaCadastroDespesas(self.root, dados_despesa=dados)
+                    self.exibir_financeiro()
+            elif tipo == "Receita":
+                if not venda_id:
+                    messagebox.showerror("Erro", "Registro financeiro sem venda vinculada.", parent=self.root)
+                    return
+                cursor.execute("""
+                    SELECT v.id, c.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
+                    FROM vendas v
+                    JOIN clientes c ON v.cliente_id = c.id
+                    WHERE v.id = ?
+                """, (venda_id,))
+                dados = cursor.fetchone()
+                if dados:
+                    dados_venda = {
+                        'id': dados[0],
+                        'cliente': f"{dados[2]} - {dados[3]}",
+                        'total': dados[4],
+                        'forma': dados[5],
+                        'parcelas': dados[6],
+                        'desconto': dados[7],
+                        'data': dados[8]
+                    }
+                    JanelaCadastroVendas(self.root, cliente_selecionado=(dados[1], dados[2], dados[3]), dados_venda=dados_venda)
+                    self.exibir_vendas()
 
     # --- Função para mostrar menu de contexto ---
     def mostrar_menu_contexto(self, event):
@@ -302,9 +351,9 @@ class SistemaAleSapatilhas:
     def excluir_logico(self):
         item = self.tree.selection()
         if not item: return
-        id_banco = self.tree.item(item, "values")[0]
+        id_banco = item[0]
         
-        if messagebox.askyesno("Confirmar", "Deseja realmente desativar este registro?"):
+        if messagebox.askyesno("Confirmar", "Deseja realmente desativar este registro?", parent=self.root):
             if self.modo_atual == "clientes":
                 database.atualizar_cliente(id_banco, status_cliente='Inativo')
                 self.exibir_clientes()
@@ -338,7 +387,7 @@ class SistemaAleSapatilhas:
         if not item: return
         id_banco = item[0]
         
-        if messagebox.askyesno("Confirmar", "Deseja bloquear este cliente?"):
+        if messagebox.askyesno("Confirmar", "Deseja bloquear este cliente?", parent=self.root):
             database.atualizar_cliente(id_banco, status_cliente='Bloqueado')
             self.exibir_clientes()
 
@@ -359,10 +408,10 @@ class SistemaAleSapatilhas:
         elif status_atual == "Inativo":
             novo_status = "Ativo"
         else:
-            messagebox.showinfo("Info", "Cliente já está ativo.")
+            messagebox.showinfo("Info", "Cliente já está ativo.", parent=self.root)
             return
         
-        if messagebox.askyesno("Confirmar", f"Restaurar cliente para '{novo_status}'?"):
+        if messagebox.askyesno("Confirmar", f"Restaurar cliente para '{novo_status}'?", parent=self.root):
             database.atualizar_cliente(id_banco, status_cliente=novo_status)
             self.exibir_clientes()
 
@@ -371,7 +420,7 @@ class SistemaAleSapatilhas:
         if not item: return
         id_banco = item[0]
         
-        if messagebox.askyesno("Confirmar", "Deseja indisponibilizar este produto?"):
+        if messagebox.askyesno("Confirmar", "Deseja indisponibilizar este produto?", parent=self.root):
             database.atualizar_produto(id_banco, status_item='Indisponível')
             self.exibir_produtos()
 
@@ -392,10 +441,10 @@ class SistemaAleSapatilhas:
         elif status_atual == "Esgotado":
             novo_status = "Disponível"
         else:
-            messagebox.showinfo("Info", "Produto já está disponível.")
+            messagebox.showinfo("Info", "Produto já está disponível.", parent=self.root)
             return
         
-        if messagebox.askyesno("Confirmar", f"Restaurar produto para '{novo_status}'?"):
+        if messagebox.askyesno("Confirmar", f"Restaurar produto para '{novo_status}'?", parent=self.root):
             database.atualizar_produto(id_banco, status_item=novo_status)
             self.exibir_produtos()
 
@@ -444,10 +493,10 @@ class SistemaAleSapatilhas:
         elif status_atual == "Atrasado":
             novo_status = "Pendente"
         else:
-            messagebox.showinfo("Info", "Despesa já está pendente.")
+            messagebox.showinfo("Info", "Despesa já está pendente.", parent=self.root)
             return
         
-        if messagebox.askyesno("Confirmar", f"Restaurar despesa para '{novo_status}'?"):
+        if messagebox.askyesno("Confirmar", f"Restaurar despesa para '{novo_status}'?", parent=self.root):
             database.atualizar_financeiro(id_banco, status=novo_status)
             self.exibir_financeiro()
 
@@ -488,7 +537,7 @@ class SistemaAleSapatilhas:
         VisualizarRecibo(self.root, id_venda=id_banco)
 
     def confirmar_saida(self):
-        if messagebox.askyesno("Sair", "Deseja encerrar o sistema Ale Sapatilhas?"):
+        if messagebox.askyesno("Sair", "Deseja encerrar o sistema Ale Sapatilhas?", parent=self.root):
             self.root.destroy()
 
 if __name__ == "__main__":

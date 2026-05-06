@@ -72,7 +72,7 @@ class JanelaCadastroClientes(tk.Toplevel):
         main_frame.columnconfigure((0, 1), weight=1)
 
         # --- Título ---
-        tk.Label(main_frame, text="Ficha Cadastro do Cliente", bg=self.bg_fundo, 
+        tk.Label(main_frame, text="Ficha Cadastral do Cliente", bg=self.bg_fundo, 
                  fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
         # --- Campos de Entrada ---
@@ -144,54 +144,66 @@ class JanelaCadastroClientes(tk.Toplevel):
     def salvar_dados(self):
         d = self.get_dados_campos()
         if not d["nome"] or not d["cpf"] or not d["tel"]:
-            messagebox.showwarning("Atenção", "Preencha os campos obrigatórios (Nome, CPF e Telefone).")
+            messagebox.showwarning("Atenção", "Preencha os campos obrigatórios (Nome, CPF e Telefone).", parent=self)
             return
 
         try:
+            dados_atualizacao = {
+                'nome': d['nome'], 'cpf': d['cpf'], 'telefone': d['tel'], 'email': d['email'],
+                'aniversario': d['niver'], 'tamanho_calcado': d['tam'], 'endereco_completo': d['endereco'],
+                'bairro': d['bairro'], 'cidade': d['cidade'], 'cep': d['cep'], 'observacao': d['obs'],
+                'limite_credito': d['limite'], 'status_cliente': d['status']
+            }
             if self.cliente_id:
-                database.atualizar_cliente(self.cliente_id, **d)
-                messagebox.showinfo("Sucesso", "Cadastro atualizado!")
+                database.atualizar_cliente(self.cliente_id, **dados_atualizacao)
+                messagebox.showinfo("Sucesso", "Cadastro atualizado!", parent=self)
             else:
                 cid = database.cadastrar_cliente(**d)
                 if not cid:
-                    messagebox.showerror("Erro", "Não foi possível cadastrar o cliente. Verifique o CPF e tente novamente.")
+                    messagebox.showerror("Erro", "Não foi possível cadastrar o cliente. Verifique o CPF e tente novamente.", parent=self)
                     return
-                messagebox.showinfo("Sucesso", "Cliente cadastrado!")
+                messagebox.showinfo("Sucesso", "Cliente cadastrado!", parent=self)
             
             if hasattr(self.master, "exibir_clientes"):
                 self.master.exibir_clientes()
             self.destroy()
         except Exception as e:
-            messagebox.showerror("Erro", f"Falha ao salvar: {e}")
+            messagebox.showerror("Erro", f"Falha ao salvar: {e}", parent=self)
 
     def gerar_venda(self):
         d = self.get_dados_campos()
         if not d["nome"]:
-            messagebox.showwarning("Atenção", "Preencha pelo menos o nome para gerar venda.")
+            messagebox.showwarning("Atenção", "Preencha pelo menos o nome para gerar venda.", parent=self)
             return
 
         try:
             # Lógica para salvar antes de vender
             if self.cliente_id:
-                database.atualizar_cliente(self.cliente_id, **d)
+                dados_atualizacao = {
+                    'nome': d['nome'], 'cpf': d['cpf'], 'telefone': d['tel'], 'email': d['email'],
+                    'aniversario': d['niver'], 'tamanho_calcado': d['tam'], 'endereco_completo': d['endereco'],
+                    'bairro': d['bairro'], 'cidade': d['cidade'], 'cep': d['cep'], 'observacao': d['obs'],
+                    'limite_credito': d['limite'], 'status_cliente': d['status']
+                }
+                database.atualizar_cliente(self.cliente_id, **dados_atualizacao)
                 cid = self.cliente_id
             else:
                 cid = database.cadastrar_cliente(**d)
                 if not cid:
-                    messagebox.showerror("Erro", "Não foi possível cadastrar o cliente. Verifique CPF e tente novamente.")
+                    messagebox.showerror("Erro", "Não foi possível cadastrar o cliente. Verifique CPF e tente novamente.", parent=self)
                     return
             
             self.destroy()
             from cadastro_vendas import JanelaCadastroVendas
             JanelaCadastroVendas(self.master, cliente_selecionado=(cid, d["nome"], d["tel"]))
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao processar: {e}")
+            messagebox.showerror("Erro", f"Erro ao processar: {e}", parent=self)
 
     def _manter_em_primeiro_plano(self):
         try:
             self.attributes("-topmost", True)
         except Exception as e:
-            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}")
+            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}", parent=self)
 
     def preencher_dados(self, d):
         mapping = [

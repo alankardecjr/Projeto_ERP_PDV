@@ -122,14 +122,36 @@ def criar_tabelas():
 
 # --- Funções de produtos ---
 def cadastrar_produto(sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto=""):
-    # --- Insere um novo produto no catálogo e retorna verdadeiro se o sku for único, caso contrário retorna falso ---
+    # --- Insere um novo produto no catálogo. Se o SKU já existir com os mesmos dados, soma a quantidade. Se o SKU existir com atributos diferentes, gera um SKU novo e salva.
     try:
         with conectar() as conn:
             cursor = conn.cursor()
+            cursor.execute("SELECT id, produto, cor, tamanho, precocusto, precovenda, categoria, material, fornecedor, status_item, foto, quantidade FROM produtos WHERE sku = ?", (sku,))
+            existente = cursor.fetchone()
+            if existente:
+                mesmo_item = (
+                    existente[1] == produto and existente[2] == cor and str(existente[3]) == str(tamanho) and
+                    float(existente[4]) == float(precocusto) and float(existente[5]) == float(precovenda) and existente[6] == categoria and
+                    existente[7] == material and existente[8] == fornecedor and existente[9] == 'Disponível'
+                )
+                if mesmo_item:
+                    cursor.execute("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?", (quantidade, existente[0]))
+                    conn.commit()
+                    return True
+                # Se SKU já existe, mas atributos mudaram, gera um novo SKU único
+                base = sku
+                suffix = 1
+                novo_sku = f"{base}_{suffix}"
+                while cursor.execute("SELECT 1 FROM produtos WHERE sku = ?", (novo_sku,)).fetchone():
+                    suffix += 1
+                    novo_sku = f"{base}_{suffix}"
+                sku = novo_sku
+
             cursor.execute("""
                 INSERT INTO produtos (sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto))
+            conn.commit()
             return True
     except sqlite3.IntegrityError:
         return False

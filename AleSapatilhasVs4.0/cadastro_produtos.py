@@ -283,7 +283,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
                 "tam": self.cb_tam.get(),
                 "custo": self.ent_custo.get().replace(",", "."),
                 "venda": self.ent_venda.get().replace(",", "."),
-                "qtd": self.ent_qtd.get().strip(),
+                "qtd": int(self.ent_qtd.get().strip()),
                 "cat": self.cb_cat.get(), 
                 "mat": self.cb_mat.get(),
                 "forn": self.ent_forn.get().strip(),
@@ -291,33 +291,59 @@ class JanelaCadastroProdutos(tk.Toplevel):
             }
 
             if not all([d["produto"], d["cor"], d["custo"], d["qtd"]]):
-                messagebox.showwarning("Atenção", "Preencha os campos obrigatórios.")
+                messagebox.showwarning("Atenção", "Preencha os campos obrigatórios.", parent=self)
                 return
 
             if self.produto_id:
-                database.atualizar_produto(
-                    self.produto_id, sku=d["sku"], produto=d["produto"], cor=d["cor"], 
-                    tamanho=d["tam"], precocusto=d["custo"], precovenda=d["venda"], 
-                    quantidade=d["qtd"], categoria=d["cat"], material=d["mat"], 
-                    fornecedor=d["forn"], status_item=d["status"]
+                with database.conectar() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT sku, produto, cor, tamanho, precocusto, precovenda, categoria, material, fornecedor, status_item, quantidade FROM produtos WHERE id = ?", (self.produto_id,))
+                    atual = cursor.fetchone()
+
+                if not atual:
+                    messagebox.showerror("Erro", "Produto não encontrado para atualização.", parent=self)
+                    return
+
+                mesmo_item = (
+                    atual[0] == d["sku"] and atual[1] == d["produto"] and atual[2] == d["cor"] and str(atual[3]) == str(d["tam"]) and
+                    float(atual[4]) == float(d["custo"]) and float(atual[5]) == float(d["venda"]) and atual[6] == d["cat"] and
+                    atual[7] == d["mat"] and atual[8] == d["forn"] and atual[9] == d["status"]
                 )
-                messagebox.showinfo("Sucesso", "Produto atualizado!")
+
+                if mesmo_item:
+                    nova_qtde = atual[10] + d["qtd"]
+                    database.atualizar_produto(
+                        self.produto_id, sku=d["sku"], produto=d["produto"], cor=d["cor"],
+                        tamanho=d["tam"], precocusto=d["custo"], precovenda=d["venda"],
+                        quantidade=nova_qtde, categoria=d["cat"], material=d["mat"],
+                        fornecedor=d["forn"], status_item=d["status"]
+                    )
+                    messagebox.showinfo("Sucesso", "Quantidade somada ao estoque do mesmo produto.", parent=self)
+                else:
+                    novo_sku = d["sku"] if atual[0] != d["sku"] else self._gerar_sku_variacao(d["sku"])
+                    criado = database.cadastrar_produto(
+                        novo_sku, d["produto"], d["cor"], d["tam"],
+                        d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"], getattr(self, 'caminho_foto', '')
+                    )
+                    if not criado:
+                        messagebox.showerror("Erro", "Falha ao cadastrar novo SKU do produto. Verifique os dados.", parent=self)
+                        return
+                    messagebox.showinfo("Sucesso", "Atributos diferentes salvos como novo SKU.", parent=self)
             else:
                 criado = database.cadastrar_produto(
                     d["sku"], d["produto"], d["cor"], d["tam"], 
-                    d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"]
+                    d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"], getattr(self, 'caminho_foto', '')
                 )
                 if not criado:
-                    messagebox.showerror("Erro", "Falha ao cadastrar produto. Verifique o SKU e tente novamente.")
+                    messagebox.showerror("Erro", "Falha ao cadastrar produto. Verifique o SKU e tente novamente.", parent=self)
                     return
-                messagebox.showinfo("Sucesso", "Produto cadastrado!")
-            
+                messagebox.showinfo("Sucesso", "Produto cadastrado!", parent=self)
+
             if hasattr(self.master, "exibir_produtos"):
                 self.master.exibir_produtos()
-            
             self.destroy()
         except Exception as e:
-            messagebox.showerror("Erro", f"Falha ao salvar: {e}")
+            messagebox.showerror("Erro", f"Falha ao salvar: {e}", parent=self)
 
     def preencher_dados(self, d):
         self.produto_id = d[0]
@@ -345,6 +371,20 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.ent_sku.delete(0, tk.END)
         self.ent_sku.insert(0, sku)
         self.ent_sku.config(state="readonly")
+
+    def _gerar_sku_variacao(self, sku_base):
+        """Gera um novo SKU único quando atributos mudam mas o SKU base já existe."""
+        base = sku_base
+        if '_' in sku_base and sku_base.rsplit('_', 1)[1].isdigit():
+            base = sku_base.rsplit('_', 1)[0]
+        suffix = 1
+        novo_sku = f"{base}_{suffix}"
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            while cursor.execute("SELECT 1 FROM produtos WHERE sku = ?", (novo_sku,)).fetchone():
+                suffix += 1
+                novo_sku = f"{base}_{suffix}"
+        return novo_sku
 
     def selecionar_foto(self, event):
         """Selecionar foto da galeria e copiar para pasta images"""
@@ -376,10 +416,10 @@ class JanelaCadastroProdutos(tk.Toplevel):
                 # Atualizar label para mostrar preview
                 self.lbl_foto.config(text=f"📷\n\nFoto selecionada:\n{nome_arquivo}", fg=self.cor_destaque)
                 
-                messagebox.showinfo("Sucesso", f"Foto '{nome_arquivo}' adicionada com sucesso!")
+                messagebox.showinfo("Sucesso", f"Foto '{nome_arquivo}' adicionada com sucesso!", parent=self)
                 
             except Exception as e:
-                messagebox.showerror("Erro", f"Falha ao copiar foto: {str(e)}")
+                messagebox.showerror("Erro", f"Falha ao copiar foto: {str(e)}", parent=self)
 
     def editar_produto_duplo_clique(self, event):
         """Editar produto com duplo clique"""
@@ -409,7 +449,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         try:
             self.attributes("-topmost", True)
         except Exception as e:
-            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}")
+            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}", parent=self)
 
     def indisponibilizar_produto_menu(self):
         """Indisponibilizar produto via menu de contexto"""
@@ -420,12 +460,12 @@ class JanelaCadastroProdutos(tk.Toplevel):
         if messagebox.askyesno("Confirmar", "Deseja indisponibilizar este produto?"):
             try:
                 database.atualizar_produto(id_prod, status_item="Indisponível")
-                messagebox.showinfo("Sucesso", "Produto indisponibilizado!")
+                messagebox.showinfo("Sucesso", "Produto indisponibilizado!", parent=self)
                 self.atualizar_tree_busca()
                 if hasattr(self.master, "exibir_produtos"):
                     self.master.exibir_produtos()
             except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao indisponibilizar produto: {str(e)}")
+                messagebox.showerror("Erro", f"Erro ao indisponibilizar produto: {str(e)}", parent=self)
 
     def promocional_produto_menu(self):
         """Marcar produto como promocional via menu de contexto"""
@@ -436,12 +476,12 @@ class JanelaCadastroProdutos(tk.Toplevel):
         if messagebox.askyesno("Confirmar", "Deseja marcar este produto como promocional?"):
             try:
                 database.atualizar_produto(id_prod, status_item="Promocional")
-                messagebox.showinfo("Sucesso", "Produto marcado como promocional!")
+                messagebox.showinfo("Sucesso", "Produto marcado como promocional!", parent=self)
                 self.atualizar_tree_busca()
                 if hasattr(self.master, "exibir_produtos"):
                     self.master.exibir_produtos()
             except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao marcar produto como promocional: {str(e)}")
+                messagebox.showerror("Erro", f"Erro ao marcar produto como promocional: {str(e)}", parent=self)
 
     def restaurar_produto_menu(self):
         """Restaurar produto via menu de contexto"""
@@ -461,18 +501,18 @@ class JanelaCadastroProdutos(tk.Toplevel):
         elif status_atual == "Esgotado":
             novo_status = "Disponível"
         else:
-            messagebox.showinfo("Info", "Não há status anterior para restaurar.")
+            messagebox.showinfo("Info", "Não há status anterior para restaurar.", parent=self)
             return
         
         if messagebox.askyesno("Confirmar", f"Restaurar produto para '{novo_status}'?"):
             try:
                 database.atualizar_produto(id_prod, status_item=novo_status)
-                messagebox.showinfo("Sucesso", "Produto restaurado!")
+                messagebox.showinfo("Sucesso", "Produto restaurado!", parent=self)
                 self.atualizar_tree_busca()
                 if hasattr(self.master, "exibir_produtos"):
                     self.master.exibir_produtos()
             except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao restaurar produto: {str(e)}")
+                messagebox.showerror("Erro", f"Erro ao restaurar produto: {str(e)}", parent=self)
 
 if __name__ == "__main__":
     root = tk.Tk()

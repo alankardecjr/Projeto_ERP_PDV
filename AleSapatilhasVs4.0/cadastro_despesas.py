@@ -63,7 +63,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
         try:
             self.attributes("-topmost", True)
         except Exception as e:
-            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}")
+            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}", parent=self)
 
     def criar_widgets(self):
         wrapper = tk.Frame(self, bg=self.bg_fundo)
@@ -111,7 +111,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
             return ent
 
         # --- Título ---
-        tk.Label(main_frame, text="Ficha Cadastral Despesa", bg=self.bg_fundo, 
+        tk.Label(main_frame, text=" Lançamento de Despesa", bg=self.bg_fundo, 
                  fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 15))
 
         # --- BUSCA RÁPIDA (Conforme Cadastro Produtos) ---
@@ -150,7 +150,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.cb_cat = ttk.Combobox(main_frame, values=self.list_categorias, state="readonly", font=("Segoe UI", 9))
         self.cb_cat.grid(row=11, column=0, sticky="ew", padx=5, ipady=2)
 
-        tk.Label(main_frame, text="FORMA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=10, column=1, sticky="w", padx=5)
+        tk.Label(main_frame, text="FORMA DE PAGAMENTO", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=10, column=1, sticky="w", padx=5)
         self.cb_forma = ttk.Combobox(main_frame, values=self.list_formas, state="readonly", font=("Segoe UI", 9))
         self.cb_forma.set("Dinheiro")
         self.cb_forma.grid(row=11, column=1, sticky="ew", padx=5, ipady=2)
@@ -172,7 +172,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.lbl_calculo.pack(side="left", padx=10)
 
         # --- TREEVIEW HISTÓRICO ---
-        tk.Label(main_frame, text="HISTÓRICO / DETALHES DAS PARCELAS", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 8, "bold")).grid(row=13, column=0, columnspan=3, sticky="w", pady=(15, 2), padx=5)
+        tk.Label(main_frame, text="HISTÓRICO DAS PARCELAS", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 8, "bold")).grid(row=13, column=0, columnspan=3, sticky="w", pady=(15, 2), padx=5)
         self.tree_pagos = ttk.Treeview(main_frame, columns=("parc", "venc", "pagto", "valor", "forma", "status"), show="headings", height=3, style="Hist.Treeview")
         
         headers = {"parc": "Nº", "venc": "VENC.", "pagto": "PAGTO", "valor": "VALOR", "forma": "FORMA", "status": "STATUS"}
@@ -252,24 +252,24 @@ class JanelaCadastroDespesas(tk.Toplevel):
         }
         
         if not all([d["ent"], d["desc"], d["val"], d["venc"]]):
-            messagebox.showwarning("Erro", "Preencha os campos obrigatórios (*)")
+            messagebox.showwarning("Erro", "Preencha os campos obrigatórios (*)", parent=self)
             return
 
         try:
             if self.despesa_id:
                 database.atualizar_despesa(self.despesa_id, entidade_nome=d["ent"], descricao=d["desc"], valor=d["val"], data_vencimento=d["venc"], forma_pagamento=d["forma"], categoria=d["cat"], status=d["status"])
-                messagebox.showinfo("Sucesso", "Despesa atualizada!")
+                messagebox.showinfo("Sucesso", "Despesa atualizada!", parent=self)
             else:
                 parc = int(self.ent_qtd_parc.get()) if self.cb_recorrencia.get() == "Parcelar" else 1
                 sucesso, mensagem = database.cadastrar_despesa(d["ent"], d["desc"], d["cat"], float(d["val"]), self.cb_recorrencia.get(), d["venc"], d["forma"], d["status"], parc)
                 if not sucesso:
-                    messagebox.showerror("Erro", mensagem)
+                    messagebox.showerror("Erro", mensagem, parent=self)
                     return
-                messagebox.showinfo("Sucesso", "Nova despesa cadastrada!")
+                messagebox.showinfo("Sucesso", "Nova despesa cadastrada!", parent=self)
             
             if hasattr(self.master, "exibir_financeiro"): self.master.exibir_financeiro()
             self.destroy()
-        except Exception as e: messagebox.showerror("Erro", str(e))
+        except Exception as e: messagebox.showerror("Erro", str(e), parent=self)
 
     def preencher_dados(self, d):
         # d vem da tabela financeiro: (id, tipo, venda_id, entidade, desc, valor, parc_at, parc_tot, venc, pagto, forma, cat, status)
@@ -296,13 +296,13 @@ class JanelaCadastroDespesas(tk.Toplevel):
             cursor.execute("SELECT tipo, venda_id FROM financeiro WHERE id=?", (id_item,))
             result = cursor.fetchone()
             if not result:
-                messagebox.showerror("Erro", "Registro financeiro não encontrado.")
+                messagebox.showerror("Erro", "Registro financeiro não encontrado.", parent=self)
                 return
             tipo, venda_id = result
         
         if tipo == "Receita":
             if not venda_id:
-                messagebox.showerror("Erro", "Registro de receita sem venda vinculada.")
+                messagebox.showerror("Erro", "Registro de receita sem venda vinculada.", parent=self)
                 return
             from cadastro_vendas import JanelaCadastroVendas
             with database.conectar() as conn:
@@ -331,7 +331,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
                 }
                 JanelaCadastroVendas(self.master, dados_venda=dados_venda_dict)
             else:
-                messagebox.showinfo("Info", "Venda não encontrada para o registro selecionado.")
+                messagebox.showinfo("Info", "Venda não encontrada para o registro selecionado.", parent=self)
         else:
             with database.conectar() as conn:
                 cursor = conn.cursor()
@@ -340,7 +340,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
                 if dados:
                     self.preencher_dados(dados)
                 else:
-                    messagebox.showerror("Erro", "Despesa não encontrada.")
+                    messagebox.showerror("Erro", "Despesa não encontrada.", parent=self)
 
     def menu_contexto(self, event):
         """Mostrar menu de contexto no botão direito"""
@@ -363,12 +363,12 @@ class JanelaCadastroDespesas(tk.Toplevel):
         if messagebox.askyesno("Confirmar", "Deseja quitar esta despesa?"):
             try:
                 database.quitar_titulo_financeiro(id_d, "Diversos")
-                messagebox.showinfo("Sucesso", "Despesa quitada!")
+                messagebox.showinfo("Sucesso", "Despesa quitada!", parent=self)
                 self.atualizar_tree_busca()
                 if hasattr(self.master, "exibir_financeiro"): 
                     self.master.exibir_financeiro()
             except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao quitar despesa: {str(e)}")
+                messagebox.showerror("Erro", f"Erro ao quitar despesa: {str(e)}", parent=self)
 
     def restaurar_despesa_menu(self):
         """Restaurar despesa via menu de contexto"""
@@ -390,18 +390,18 @@ class JanelaCadastroDespesas(tk.Toplevel):
         elif status_atual == "Atrasado":
             novo_status = "Pendente"
         else:
-            messagebox.showinfo("Info", "Não há status anterior para restaurar.")
+            messagebox.showinfo("Info", "Não há status anterior para restaurar.", parent=self)
             return
         
         if messagebox.askyesno("Confirmar", f"Restaurar despesa para '{novo_status}'?"):
             try:
                 database.atualizar_financeiro(id_d, status=novo_status)
-                messagebox.showinfo("Sucesso", "Despesa restaurada!")
+                messagebox.showinfo("Sucesso", "Despesa restaurada!", parent=self)
                 self.atualizar_tree_busca()
                 if hasattr(self.master, "exibir_financeiro"): 
                     self.master.exibir_financeiro()
             except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao restaurar despesa: {str(e)}")
+                messagebox.showerror("Erro", f"Erro ao restaurar despesa: {str(e)}", parent=self)
 
 
 class VisualizarRecibo(tk.Toplevel):
@@ -436,7 +436,7 @@ class VisualizarRecibo(tk.Toplevel):
             dados = cursor.fetchone()
         
         if not dados:
-            messagebox.showerror("Erro", "Venda não encontrada!")
+            messagebox.showerror("Erro", "Venda não encontrada!", parent=self)
             self.destroy()
             return
         
