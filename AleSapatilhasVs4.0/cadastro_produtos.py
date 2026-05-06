@@ -153,14 +153,14 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.ent_data_lancamento.insert(0, datetime.now().strftime("%d/%m/%Y"))
         aplicar_estilo_foco(self.ent_data_lancamento)
 
-        # --- Campo Status do Produto ---
-        tk.Label(main_frame, text="STATUS DO PRODUTO*", bg=self.bg_fundo, fg=self.cor_lbl, 
+        # --- Campo Status do Item ---
+        tk.Label(main_frame, text="STATUS DO ITEM*", bg=self.bg_fundo, fg=self.cor_lbl, 
                  font=("Segoe UI", 8, "bold")).grid(row=13, column=1, sticky="w", pady=(3, 0))
-        self.var_status_produto = tk.StringVar(value="Disponível")
-        self.opt_status_produto = tk.OptionMenu(main_frame, self.var_status_produto, "Disponível", "Indisponível", "Esgotado", "Promocional")
-        self.opt_status_produto.config(bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, 
-                                      highlightbackground=self.cor_borda, font=("Segoe UI", 10), cursor="hand2")
-        self.opt_status_produto.grid(row=14, column=1, sticky="ew", pady=(1, 0))
+        self.var_status = tk.StringVar(value="Disponível")
+        self.opt_status = tk.OptionMenu(main_frame, self.var_status, *self.list_status)
+        self.opt_status.config(bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, 
+                                highlightbackground=self.cor_borda, font=("Segoe UI", 10), cursor="hand2")
+        self.opt_status.grid(row=14, column=1, sticky="ew", pady=(1, 0))
 
         # --- GRADE DE ESTOQUE E FOTO ---
         tk.Label(main_frame, text="GRADE DE ESTOQUE", bg=self.bg_fundo, fg=self.cor_texto, 
@@ -183,14 +183,6 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.cb_cor = criar_combo(frame_grade, "COR*", self.list_cores, 0, 0, 2)
         self.cb_tam = criar_combo(frame_grade, "TAMANHO*", self.list_tamanhos, 2, 0, 2)
         self.ent_qtd = criar_campo(frame_grade, "QUANTIDADE*", 4, col=0, colspan=1)
-        
-        tk.Label(frame_grade, text="STATUS DO ITEM*", bg=self.bg_card, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=4, column=1, sticky="w", pady=(3, 0))
-        self.var_status = tk.StringVar(value="Disponível")
-        self.opt_status = tk.OptionMenu(frame_grade, self.var_status, *self.list_status)
-        self.opt_status.config(bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, 
-                                highlightbackground=self.cor_borda, font=("Segoe UI", 10), cursor="hand2")
-        self.opt_status.grid(row=5, column=1, sticky="ew", pady=(1, 0))
 
         # --- ESPAÇO PARA FOTO (lado direito) ---
         frame_foto = tk.LabelFrame(frame_conteudo, bg=self.bg_card, relief="groove", borderwidth=1, padx=10, pady=10, text="Foto")

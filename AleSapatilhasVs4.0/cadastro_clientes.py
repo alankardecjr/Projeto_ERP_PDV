@@ -104,26 +104,26 @@ class JanelaCadastroClientes(tk.Toplevel):
         self.texto_btn = "ATUALIZAR CADASTRO" if self.cliente_id else "SALVAR CADASTRO"
         self.cor_base_acao = self.cor_hover_field if self.cliente_id else self.cor_btn_acao
 
-        # Frame para botões superiores
         frame_botoes_superior = tk.Frame(main_frame, bg=self.bg_fundo)
         frame_botoes_superior.grid(row=19, column=0, columnspan=2, pady=(10, 0), sticky="ew")
-        
+        frame_botoes_superior.columnconfigure(0, weight=3)
+        frame_botoes_superior.columnconfigure(1, weight=3)
+        frame_botoes_superior.columnconfigure(2, weight=1)
+
         self.btn_salvar = tk.Button(frame_botoes_superior, text=self.texto_btn, bg=self.cor_base_acao, fg="white", 
                                     font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                     command=self.salvar_dados)
-        self.btn_salvar.pack(side="left", padx=(0, 10), ipady=5, expand=True)
+        self.btn_salvar.grid(row=0, column=0, sticky="ew", padx=(0, 10), ipady=6)
         
-        # --- Botão Gerar Venda (sempre disponível) ---
         self.btn_gerar_venda = tk.Button(frame_botoes_superior, text="🛒 GERAR VENDA", bg=self.cor_destaque, fg="white", 
                                          font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                          command=self.gerar_venda)
-        self.btn_gerar_venda.pack(side="right", ipady=5, expand=True)
-        
-        # Botão Cancelar embaixo
-        self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_sair, fg="white", 
+        self.btn_gerar_venda.grid(row=0, column=1, sticky="ew", padx=(0, 10), ipady=6)
+
+        self.btn_cancelar = tk.Button(frame_botoes_superior, text="CANCELAR", bg=self.cor_btn_sair, fg="white", 
                                       font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                       command=self.destroy)
-        self.btn_cancelar.grid(row=20, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=5)
+        self.btn_cancelar.grid(row=0, column=2, sticky="ew", ipady=6)
 
         # --- Hovers ---
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))

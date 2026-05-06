@@ -27,8 +27,8 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
         
-        # --- Aplicar dimensões padrão (600px largura, altura reduzida) ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=700)
+        # --- Aplicar dimensões padrão (600px largura, altura aumentada) ---
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=780)
         
         self.despesa_id = dados_despesa[0] if dados_despesa else None
         
@@ -103,7 +103,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
             return ent
 
         # --- Título ---
-        tk.Label(main_frame, text="Ficha Cadastro Despesa", bg=self.bg_fundo, 
+        tk.Label(main_frame, text="Ficha Cadastral Despesa", bg=self.bg_fundo, 
                  fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 15))
 
         # --- BUSCA RÁPIDA (Conforme Cadastro Produtos) ---
@@ -122,34 +122,34 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.tree_busca.bind("<Button-3>", self.menu_contexto)
 
         # --- FORMULÁRIO ---
-        self.ent_entidade = criar_campo(main_frame, "FORNECEDOR*", 3, 0, colspan=3)
-        self.ent_desc = criar_campo(main_frame, "DESCRIÇÃO DA DESPESA*", 5, 0, colspan=3)
+        self.ent_entidade = criar_campo(main_frame, "FORNECEDOR*", 4, 0, colspan=3)
+        self.ent_desc = criar_campo(main_frame, "DESCRIÇÃO DA DESPESA*", 6, 0, colspan=3)
 
         # Linha de Valores e Datas
-        self.ent_valor = criar_campo(main_frame, "VALOR (R$)*", 7, 0)
+        self.ent_valor = criar_campo(main_frame, "VALOR (R$)*", 8, 0)
         self.ent_valor.bind("<KeyRelease>", lambda e: self.atualizar_calculo_parcela())
-        self.ent_vencimento = criar_campo(main_frame, "VENCIMENTO (DD/MM/AAAA)*", 7, 1)
+        self.ent_vencimento = criar_campo(main_frame, "VENCIMENTO (DD/MM/AAAA)*", 8, 1)
         self.ent_vencimento.insert(0, datetime.now().strftime("%d/%m/%Y"))
         
-        tk.Label(main_frame, text="STATUS*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=7, column=2, sticky="w", padx=5)
+        tk.Label(main_frame, text="STATUS*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=8, column=2, sticky="w", padx=5)
         self.cb_status = ttk.Combobox(main_frame, values=self.list_status, state="readonly", font=("Segoe UI", 9))
         self.cb_status.set("Pendente")
-        self.cb_status.grid(row=8, column=2, sticky="ew", padx=5, ipady=2)
+        self.cb_status.grid(row=9, column=2, sticky="ew", padx=5, ipady=2)
 
         # Linha de Configurações 
-        tk.Label(main_frame, text="CATEGORIA*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=9, column=0, sticky="w", padx=5)
+        tk.Label(main_frame, text="CATEGORIA*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=10, column=0, sticky="w", padx=5)
         self.cb_cat = ttk.Combobox(main_frame, values=self.list_categorias, state="readonly", font=("Segoe UI", 9))
-        self.cb_cat.grid(row=10, column=0, sticky="ew", padx=5, ipady=2)
+        self.cb_cat.grid(row=11, column=0, sticky="ew", padx=5, ipady=2)
 
-        tk.Label(main_frame, text="FORMA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=9, column=1, sticky="w", padx=5)
+        tk.Label(main_frame, text="FORMA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=10, column=1, sticky="w", padx=5)
         self.cb_forma = ttk.Combobox(main_frame, values=self.list_formas, state="readonly", font=("Segoe UI", 9))
         self.cb_forma.set("Dinheiro")
-        self.cb_forma.grid(row=10, column=1, sticky="ew", padx=5, ipady=2)
+        self.cb_forma.grid(row=11, column=1, sticky="ew", padx=5, ipady=2)
 
-        tk.Label(main_frame, text="RECORRÊNCIA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=9, column=2, sticky="w", padx=5)
+        tk.Label(main_frame, text="RECORRÊNCIA", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=10, column=2, sticky="w", padx=5)
         self.cb_recorrencia = ttk.Combobox(main_frame, values=self.list_recorrencia, state="readonly", font=("Segoe UI", 9))
         self.cb_recorrencia.set("Não Recorrente")
-        self.cb_recorrencia.grid(row=10, column=2, sticky="ew", padx=5, ipady=2)
+        self.cb_recorrencia.grid(row=11, column=2, sticky="ew", padx=5, ipady=2)
         self.cb_recorrencia.bind("<<ComboboxSelected>>", self.toggle_parcelas)
 
         # Sub-menu Parcelas
@@ -163,22 +163,22 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.lbl_calculo.pack(side="left", padx=10)
 
         # --- TREEVIEW HISTÓRICO ---
-        tk.Label(main_frame, text="HISTÓRICO / DETALHES DAS PARCELAS", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 8, "bold")).grid(row=12, column=0, columnspan=3, sticky="w", pady=(15, 2), padx=5)
+        tk.Label(main_frame, text="HISTÓRICO / DETALHES DAS PARCELAS", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 8, "bold")).grid(row=13, column=0, columnspan=3, sticky="w", pady=(15, 2), padx=5)
         self.tree_pagos = ttk.Treeview(main_frame, columns=("parc", "venc", "pagto", "valor", "forma", "status"), show="headings", height=3, style="Hist.Treeview")
         
         headers = {"parc": "Nº", "venc": "VENC.", "pagto": "PAGTO", "valor": "VALOR", "forma": "FORMA", "status": "STATUS"}
         for col, text in headers.items():
             self.tree_pagos.heading(col, text=text)
             self.tree_pagos.column(col, width=80, anchor="center")
-        self.tree_pagos.grid(row=13, column=0, columnspan=3, sticky="ew", padx=5)
+        self.tree_pagos.grid(row=14, column=0, columnspan=3, sticky="ew", padx=5)
 
         # --- BOTÕES (Dual Mode e Hover) ---
         texto_btn = "ATUALIZAR DESPESA" if self.despesa_id else "SALVAR DESPESA"
         self.btn_salvar = tk.Button(main_frame, text=texto_btn, bg=self.cor_btn_acao, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.validar_e_salvar)
-        self.btn_salvar.grid(row=14, column=0, columnspan=3, pady=(10, 0), sticky="ew", ipady=6)
+        self.btn_salvar.grid(row=15, column=0, columnspan=3, pady=(10, 0), sticky="ew", ipady=6)
         
         self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_sair, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.destroy)
-        self.btn_cancelar.grid(row=15, column=0, columnspan=3, pady=(10, 0), sticky="ew", ipady=6)
+        self.btn_cancelar.grid(row=16, column=0, columnspan=3, pady=(10, 0), sticky="ew", ipady=6)
 
         # Bind Hovers
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
@@ -199,8 +199,9 @@ class JanelaCadastroDespesas(tk.Toplevel):
     # --- LÓGICA ---
     def toggle_parcelas(self, event):
         if self.cb_recorrencia.get() == "Parcelar":
-            self.frame_parcelas.grid(row=11, column=0, columnspan=3, sticky="ew", pady=5)
-        else: self.frame_parcelas.grid_forget()
+            self.frame_parcelas.grid(row=12, column=0, columnspan=3, sticky="ew", pady=5)
+        else:
+            self.frame_parcelas.grid_forget()
 
     def atualizar_calculo_parcela(self):
         try:
