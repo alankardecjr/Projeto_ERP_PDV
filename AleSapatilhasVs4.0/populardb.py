@@ -117,6 +117,19 @@ def popular_banco():
             if not resultado:
                 print(f"Venda {venda_index} não registrada: {msg}")
 
+    # --- PAGAMENTOS DE TESTE ---
+    # Simular pagamentos para algumas vendas
+    with database.conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, valor_total FROM vendas LIMIT 5")
+        vendas_para_pagar = cursor.fetchall()
+        
+        for venda in vendas_para_pagar:
+            venda_id, valor_total = venda
+            valor_pago = valor_total  # Pagamento total
+            forma_pag = random.choice(["Dinheiro", "Cartão de Crédito", "Pix"])
+            database.registrar_pagamento(venda_id, None, valor_pago, forma_pag, f"Pagamento da venda #{venda_id}")
+
     print("\n✅ Banco de Dados Vs4.0 populado com teste completo!")
 
 

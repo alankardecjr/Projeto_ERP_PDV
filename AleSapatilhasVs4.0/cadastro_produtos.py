@@ -443,7 +443,8 @@ class JanelaCadastroProdutos(tk.Toplevel):
 
     def editar_produto_menu(self):
         """Editar produto via menu de contexto"""
-        self.editar_produto_duplo_clique(None)
+        if messagebox.askyesno("Confirmar", "Deseja editar este produto?", parent=self):
+            self.editar_produto_duplo_clique(None)
 
     def _manter_em_primeiro_plano(self):
         try:

@@ -101,6 +101,21 @@ def criar_tabelas():
             status TEXT DEFAULT 'Pendente' CHECK(status IN ('Pendente', 'Pago', 'Atrasado', 'Cancelado')),
             FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE
         )""")
+
+        # --- Tabela de pagamentos: registra pagamentos efetuados para vendas ou despesas ---
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pagamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            venda_id INTEGER,
+            financeiro_id INTEGER,
+            valor_pago REAL NOT NULL,
+            forma_pagamento TEXT NOT NULL,
+            data_pagamento DATETIME DEFAULT CURRENT_TIMESTAMP,
+            parcela_referente INTEGER,
+            observacao TEXT,
+            FOREIGN KEY (venda_id) REFERENCES vendas (id),
+            FOREIGN KEY (financeiro_id) REFERENCES financeiro (id)
+        )""")
         
         # --- Gatilho de estoque: altera automaticamente o status do produto para 'esgotado' quando a quantidade atinge zero ou menos ---
         cursor.execute("""
@@ -160,7 +175,7 @@ def exibir_produtos():
     # --- Recupera a lista completa de produtos cadastrados com seus principais detalhes técnicos e comerciais ---
     with conectar() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item, foto FROM produtos")
+        cursor.execute("SELECT id, sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item, foto FROM produtos ORDER BY produto ASC")
         return cursor.fetchall()
 
 def atualizar_produto(produto_id, **kwargs):
@@ -190,7 +205,7 @@ def exibir_clientes():
     # --- Lista todos os clientes cadastrados trazendo informações de contato, status e histórico de cadastro ---
     with conectar() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito, data_cadastro, status_cliente FROM clientes")
+        cursor.execute("SELECT id, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito, data_cadastro, status_cliente FROM clientes ORDER BY nome ASC")
         return cursor.fetchall()
 
 def atualizar_cliente(cliente_id, **kwargs):
@@ -222,7 +237,7 @@ def buscar_cliente_nome(termo):
 def listar_itens():
     with conectar() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item, foto FROM produtos WHERE status_item != 'Indisponível'")
+        cursor.execute("SELECT id, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item, foto FROM produtos WHERE status_item != 'Indisponível' ORDER BY produto ASC")
         return cursor.fetchall()
 
 # --- Movimentações e vendas ---
@@ -291,7 +306,15 @@ def lancar_despesa(descricao, valor, categoria, vencimento, parcelas=1):
         conn.commit()
 
 # --- Funções específicas de Despesas ---
-def cadastrar_despesa(fornecedor, descricao, categoria, valor, recorrencia, vencimento, forma_pagamento, status, parcelas=1):
+def registrar_pagamento(venda_id, financeiro_id, valor_pago, forma_pagamento, observacao=""):
+    # --- Registra um pagamento efetuado para uma venda ou lançamento financeiro ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO pagamentos (venda_id, financeiro_id, valor_pago, forma_pagamento, observacao)
+            VALUES (?, ?, ?, ?, ?)
+        """, (venda_id, financeiro_id, valor_pago, forma_pagamento, observacao))
+        return cursor.lastrowid
     # --- Cadastra uma nova despesa registrando todos os dados financeiros e permitindo parcelamento ---
     try:
         with conectar() as conn:

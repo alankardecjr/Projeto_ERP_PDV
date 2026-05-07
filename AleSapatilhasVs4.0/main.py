@@ -143,6 +143,14 @@ class SistemaAleSapatilhas:
                 else:
                     btn.config(bg=self.cor_btn_menu, fg="white")
 
+    def confirmar_acao_menu(self, titulo, func, mensagem=None):
+        """Mostra confirmação antes de executar uma ação de menu de contexto."""
+        if not func:
+            return
+        mensagem = mensagem or f"Deseja realmente {titulo.lower()}?"
+        if messagebox.askyesno(titulo, mensagem, parent=self.root):
+            func()
+
     def focus_linha_mouse(self, event):
         """Define foco na linha onde o mouse está passando"""
         item = self.tree.identify_row(event.y)
@@ -364,6 +372,8 @@ class SistemaAleSapatilhas:
     def quitar_selecionado(self):
         item = self.tree.selection()
         if not item: return
+        if not messagebox.askyesno("Confirmar", "Deseja quitar este lançamento financeiro?", parent=self.root):
+            return
         id_banco = item[0]
         database.quitar_titulo_financeiro(id_banco, "Dinheiro")
         self.exibir_financeiro()
@@ -463,6 +473,8 @@ class SistemaAleSapatilhas:
     def editar_despesa(self):
         item = self.tree.selection()
         if not item: return
+        if not messagebox.askyesno("Confirmar", "Deseja editar este lançamento financeiro?", parent=self.root):
+            return
         id_banco = item[0]
         
         from cadastro_despesas import JanelaCadastroDespesas
@@ -503,6 +515,8 @@ class SistemaAleSapatilhas:
     def editar_venda(self):
         item = self.tree.selection()
         if not item: return
+        if not messagebox.askyesno("Confirmar", "Deseja editar esta venda?", parent=self.root):
+            return
         id_banco = item[0]
         
         from cadastro_vendas import JanelaCadastroVendas

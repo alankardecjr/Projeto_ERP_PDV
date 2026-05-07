@@ -284,6 +284,23 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.cb_status.set(d[12])
         self.btn_salvar.config(text="ATUALIZAR DESPESA", bg=self.cor_hover_field)
 
+        # Preencher histórico de parcelas
+        self.tree_pagos.delete(*self.tree_pagos.get_children())
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            # Buscar todas as parcelas relacionadas (mesma entidade e descrição, mas diferentes parcela_atual)
+            cursor.execute("""
+                SELECT parcela_atual, data_vencimento, data_pagamento, valor, forma_pagamento, status
+                FROM financeiro 
+                WHERE entidade_nome = ? AND descricao = ? AND tipo = 'Despesa'
+                ORDER BY parcela_atual
+            """, (d[3], d[4]))
+            parcelas = cursor.fetchall()
+            for parc in parcelas:
+                venc = datetime.strptime(parc[1], "%Y-%m-%d").strftime("%d/%m/%Y") if parc[1] else ""
+                pagto = datetime.strptime(parc[2], "%Y-%m-%d").strftime("%d/%m/%Y") if parc[2] else ""
+                self.tree_pagos.insert("", "end", values=(parc[0], venc, pagto, f"R$ {parc[3]:.2f}", parc[4] or "", parc[5]))
+
     def editar_despesa_duplo_clique(self, event):
         """Editar despesa/receita com duplo clique - distingue tipo"""
         sel = self.tree_busca.selection()
@@ -352,7 +369,8 @@ class JanelaCadastroDespesas(tk.Toplevel):
 
     def editar_despesa_menu(self):
         """Editar despesa/receita via menu de contexto"""
-        self.editar_despesa_duplo_clique(None)
+        if messagebox.askyesno("Confirmar", "Deseja editar este lançamento financeiro?", parent=self):
+            self.editar_despesa_duplo_clique(None)
 
     def quitar_despesa_menu(self):
         """Quitar despesa via menu de contexto"""
