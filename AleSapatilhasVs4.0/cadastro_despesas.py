@@ -442,11 +442,11 @@ class VisualizarRecibo(tk.Toplevel):
         with database.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT v.id, c.nome, c.telefone, v.total, v.forma_pagamento, v.parcelas, v.desconto, v.data_venda,
-                       GROUP_CONCAT(CONCAT(p.produto, ' (', vi.qtd, 'x R$ ', vi.preco_unitario, ')')) as produtos
+                SELECT v.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda,
+                       GROUP_CONCAT(p.produto || ' (' || vi.quantidade || 'x R$ ' || vi.preco_unitario || ')', ', ') as produtos
                 FROM vendas v
                 JOIN clientes c ON v.cliente_id = c.id
-                JOIN vendas_itens vi ON v.id = vi.venda_id
+                JOIN itens_venda vi ON v.id = vi.venda_id
                 JOIN produtos p ON vi.produto_id = p.id
                 WHERE v.id = ?
                 GROUP BY v.id

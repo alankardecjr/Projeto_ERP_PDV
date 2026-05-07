@@ -214,7 +214,7 @@ class JanelaCadastroVendas(tk.Toplevel):
             self.ent_bairro_cli.insert(0, cli[8] or "")
             self.ent_cidade_cli.delete(0, tk.END)
             self.ent_cidade_cli.insert(0, cli[9] or "")
-            self.var_status_cli.set(cli[13] or "Ativo")
+            self.var_status_cli.set(cli[14] or "Ativo")
         else:
             messagebox.showerror("Erro", "Cliente não encontrado!")
 
@@ -224,6 +224,10 @@ class JanelaCadastroVendas(tk.Toplevel):
         
         p = self.produtos_db[sel] # (id, prod, cor, tam, custo, venda, qtd, cat, mat, forn, status, foto)
         
+        if p[6] <= 0:
+            messagebox.showwarning("Estoque", "Produto sem estoque disponível.")
+            return
+
         # Verifica se já está no carrinho para somar qtd
         for item in self.carrinho:
             if item[0] == p[0]:
