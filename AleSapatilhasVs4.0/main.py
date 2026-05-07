@@ -193,14 +193,13 @@ class SistemaAleSapatilhas:
 
     def exibir_financeiro(self):
         self.modo_atual = "financeiro"
-        self.lbl_titulo.config(text="� FLUXO DE CAIXA")
+        self.lbl_titulo.config(text="💸 FLUXO DE CAIXA")
         self.preparar_colunas(("tipo", "Fornecedor", "descrição", "parcelas", "valor", "vencimento", "pagamento", "forma", "categoria", "recorrencia", "status"))
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, tipo, entidade_nome, descricao,total_parcelas, valor, data_vencimento, data_pagamento, forma_pagamento, categoria, status FROM financeiro ORDER BY data_vencimento DESC")
+            cursor.execute("SELECT id, tipo, entidade_nome, descricao, total_parcelas, valor, data_vencimento, data_pagamento, forma_pagamento, categoria, recorrencia, status FROM financeiro ORDER BY data_vencimento DESC")
             for f in cursor.fetchall():
-                recorrencia = "Sim" if f[4] > 1 else "Não"
-                self.tree.insert("", "end", iid=f[0], values=(f[1], f[2], f[3], f[4], f"R$ {f[5]:.2f}", f[6], f[7], f[8], f[9], recorrencia, f[10]))
+                self.tree.insert("", "end", iid=f[0], values=(f[1], f[2], f[3], f[4], f"R$ {f[5]:.2f}", f[6], f[7], f[8], f[9], f[10], f[11]))
 
     def exibir_dashboard(self):
         res = database.dashboard_resumo()
@@ -328,7 +327,8 @@ class SistemaAleSapatilhas:
             menu = tk.Menu(self.root, tearoff=0)
             
             if self.modo_atual == "clientes":
-                menu.add_command(label="Editar", command=self.editar_selecionado)
+                menu.add_command(label="Editar Cliente", command=self.editar_selecionado)
+                menu.add_command(label="Visualizar Cliente", command=self.visualizar_cliente)
                 menu.add_separator()
                 menu.add_command(label="✓ Ativo", command=lambda: self._mudar_status_cliente("Ativo"))
                 menu.add_command(label="★ VIP", command=lambda: self._mudar_status_cliente("Vip"))
@@ -349,7 +349,18 @@ class SistemaAleSapatilhas:
                 menu.add_command(label="Sair", command=lambda: None)
                 
             elif self.modo_atual == "financeiro":
+                # Verificar o tipo do registro selecionado
+                item_id = self.tree.selection()
+                tipo_registro = "Despesa"  # padrão
+                if item_id:
+                    valores = self.tree.item(item_id[0], "values")
+                    if valores and len(valores) > 0:
+                        tipo_registro = valores[0]  # primeira coluna é "tipo"
+                
+                visualizar_label = f"Visualizar {tipo_registro}"
+                
                 menu.add_command(label="Editar", command=self.editar_despesa)
+                menu.add_command(label=visualizar_label, command=self.visualizar_despesa)
                 menu.add_separator()
                 menu.add_command(label="◎ Pendente", command=lambda: self._mudar_status_despesa("Pendente"))
                 menu.add_command(label="✓ Pago", command=lambda: self._mudar_status_despesa("Pago"))
@@ -438,6 +449,46 @@ class SistemaAleSapatilhas:
         if messagebox.askyesno("Confirmar", f"Restaurar cliente para '{novo_status}'?", parent=self.root):
             database.atualizar_cliente(id_banco, status_cliente=novo_status)
             self.exibir_clientes()
+
+    def visualizar_cliente(self):
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito, status_cliente FROM clientes WHERE id = ?", (id_banco,))
+            dados = cursor.fetchone()
+        if not dados:
+            messagebox.showerror("Erro", "Cliente não encontrado.", parent=self.root)
+            return
+        
+        janela = tk.Toplevel(self.root)
+        janela.title("Visualizar Cliente")
+        janela.configure(bg=self.bg_fundo)
+        janela.transient(self.root)
+        janela.grab_set()
+        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=560, altura_desejada=620)
+        
+        info_text = f"""
+Nome: {dados[0]}
+CPF: {dados[1] or 'N/A'}
+Telefone: {dados[2]}
+Email: {dados[3] or 'N/A'}
+Aniversário: {dados[4] or 'N/A'}
+Tamanho Calçado: {dados[5] or 'N/A'}
+Endereço: {dados[6] or 'N/A'}
+Bairro: {dados[7] or 'N/A'}
+Cidade: {dados[8] or 'N/A'}
+CEP: {dados[9] or 'N/A'}
+Observação: {dados[10] or 'N/A'}
+Limite de Crédito: R$ {dados[11]:.2f}
+Status: {dados[12]}
+        """
+        frame = tk.Frame(janela, bg=self.bg_fundo, padx=20, pady=20)
+        frame.pack(fill="both", expand=True)
+        tk.Label(frame, text="👤 VISUALIZAR CLIENTE", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
+        tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 10), justify="left", relief="solid", borderwidth=1, padx=10, pady=10).pack(fill="both", expand=True)
+        tk.Button(frame, text="FECHAR", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
 
     def indisponibilizar_produto(self):
         item = self.tree.selection()
@@ -589,6 +640,57 @@ class SistemaAleSapatilhas:
             if dados:
                 JanelaCadastroDespesas(self.root, dados_despesa=dados)
                 self.exibir_financeiro()
+
+    def visualizar_despesa(self):
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT tipo, entidade_nome, descricao, valor, parcela_atual, total_parcelas, data_vencimento, data_pagamento, forma_pagamento, categoria, status, recorrencia FROM financeiro WHERE id = ?", (id_banco,))
+            dados = cursor.fetchone()
+
+        if not dados:
+            messagebox.showerror("Erro", "Registro financeiro não encontrado.", parent=self.root)
+            return
+
+        tipo, entidade_nome, descricao, valor, parcela_atual, total_parcelas, data_vencimento, data_pagamento, forma_pagamento, categoria, status, recorrencia = dados
+        
+        # Determinar se é receita ou despesa para ajustar labels
+        if tipo == "Receita":
+            titulo = "💰 VISUALIZAR RECEITA"
+            entidade_label = "Cliente"
+        else:
+            titulo = "💰 VISUALIZAR DESPESA"
+            entidade_label = "Fornecedor"
+
+        janela = tk.Toplevel(self.root)
+        janela.title(f"Visualizar {tipo}")
+        janela.configure(bg=self.bg_fundo)
+        janela.transient(self.root)
+        janela.grab_set()
+        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=560, altura_desejada=620)
+
+        frame = tk.Frame(janela, bg=self.bg_fundo, padx=20, pady=20)
+        frame.pack(fill="both", expand=True)
+
+        info_text = f"""
+{entidade_label}: {entidade_nome}
+Descrição: {descricao}
+Valor: R$ {valor:.2f}
+Parcela: {parcela_atual} de {total_parcelas}
+Vencimento: {datetime.strptime(data_vencimento, '%Y-%m-%d').strftime('%d/%m/%Y') if data_vencimento else 'N/A'}
+Data de Pagamento: {datetime.strptime(data_pagamento, '%Y-%m-%d').strftime('%d/%m/%Y') if data_pagamento else 'N/A'}
+Forma de Pagamento: {forma_pagamento or 'N/A'}
+Categoria: {categoria or 'N/A'}
+Status: {status}
+Recorrência: {recorrencia or 'Não Recorrente'}
+        """
+
+        tk.Label(frame, text=titulo, bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
+        tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 10), justify="left", relief="solid", borderwidth=1, padx=10, pady=10).pack(fill="both", expand=True)
+        tk.Button(frame, text="FECHAR", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
 
     def restaurar_despesa(self):
         item = self.tree.selection()

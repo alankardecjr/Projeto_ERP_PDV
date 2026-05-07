@@ -272,13 +272,12 @@ class JanelaCadastroProdutos(tk.Toplevel):
     def selecionar_da_busca(self, event):
         selecao = self.tree_busca.selection()
         if not selecao: return
-        id_prod = self.tree_busca.item(selecao)["values"][0]
-        # Correção aqui: garantindo que a conexão e preenchimento funcionem
+        id_prod = self.tree_busca.item(selecao[0])["values"][0]
         with database.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_prod,))
             dados = cursor.fetchone()
-            if dados: 
+            if dados:
                 self.preencher_dados(dados)
 
     def validar_e_salvar(self):
@@ -559,6 +558,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         """Selecionar foto da galeria e copiar para pasta images"""
         # Abrir diálogo para selecionar arquivo
         caminho_origem = filedialog.askopenfilename(
+            parent=self,
             title="Selecionar Foto do Produto",
             filetypes=[("Imagens", "*.jpg *.jpeg *.png *.gif *.bmp"), ("Todos os arquivos", "*.*")]
         )
@@ -594,7 +594,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         """Editar produto com duplo clique"""
         selecao = self.tree_busca.selection()
         if not selecao: return
-        id_prod = self.tree_busca.item(selecao)["values"][0]
+        id_prod = self.tree_busca.item(selecao[0])["values"][0]
         with database.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_prod,))
@@ -605,8 +605,10 @@ class JanelaCadastroProdutos(tk.Toplevel):
     def menu_contexto_produto(self, event):
         """Mostrar menu de contexto no botão direito"""
         try:
-            self.tree_busca.selection_set(self.tree_busca.identify_row(event.y))
-            self.menu_contexto.post(event.x_root, event.y_root)
+            item = self.tree_busca.identify_row(event.y)
+            if item:
+                self.tree_busca.selection_set(item)
+                self.menu_contexto.post(event.x_root, event.y_root)
         except:
             pass
 
@@ -619,9 +621,8 @@ class JanelaCadastroProdutos(tk.Toplevel):
         """Visualizar produto via menu de contexto"""
         selecao = self.tree_busca.selection()
         if not selecao: return
-        id_prod = self.tree_busca.item(selecao)["values"][0]
+        id_prod = self.tree_busca.item(selecao[0])["values"][0]
         
-        # Buscar dados completos do produto
         with database.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_prod,))
@@ -716,7 +717,7 @@ class VisualizarProduto(tk.Toplevel):
         
         self.title("Detalhes do Produto")
         self.configure(bg=self.bg_fundo)
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=500, altura_desejada=600)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=560, altura_desejada=620)
         
         # Criar interface
         main_frame = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=20)

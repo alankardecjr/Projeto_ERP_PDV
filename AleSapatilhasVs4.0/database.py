@@ -99,6 +99,7 @@ def criar_tabelas():
             forma_pagamento TEXT,
             categoria TEXT,
             status TEXT DEFAULT 'Pendente' CHECK(status IN ('Pendente', 'Pago', 'Atrasado', 'Cancelado')),
+            recorrencia TEXT DEFAULT 'Não Recorrente',
             FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE
         )""")
 
@@ -132,6 +133,11 @@ def criar_tabelas():
         colunas_produtos = [row[1] for row in cursor.fetchall()]
         if "foto" not in colunas_produtos:
             cursor.execute("ALTER TABLE produtos ADD COLUMN foto TEXT DEFAULT ''")
+
+        cursor.execute("PRAGMA table_info(financeiro)")
+        colunas_financeiro = [row[1] for row in cursor.fetchall()]
+        if "recorrencia" not in colunas_financeiro:
+            cursor.execute("ALTER TABLE financeiro ADD COLUMN recorrencia TEXT DEFAULT 'Não Recorrente'")
         
         conn.commit()
 
@@ -271,7 +277,7 @@ def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, de
             # --- Geração de parcelas financeiras: cria registros de receita com vencimentos mensais baseados no número de parcelas ---
             valor_parc = round(total_liquido / parcelas, 2)
             for i in range(parcelas):
-                venc = (datetime.now() + timedelta(days=30*i)).strftime("%Y-%m-%d")
+                venc = adicionar_meses(datetime.now(), i).strftime("%Y-%m-%d")
                 cursor.execute("""
                     INSERT INTO financeiro (tipo, venda_id, entidade_nome, descricao, valor, parcela_atual, total_parcelas, data_vencimento, categoria)
                     VALUES ('Receita', ?, (SELECT nome FROM clientes WHERE id=?), ?, ?, ?, ?, ?, 'Venda de Produtos')
@@ -307,7 +313,7 @@ def lancar_despesa(descricao, valor, categoria, vencimento, parcelas=1):
         cursor = conn.cursor()
         valor_parc = round(valor / parcelas, 2)
         for i in range(parcelas):
-            data_venc = (data_inicial + timedelta(days=30*i)).strftime("%Y-%m-%d")
+            data_venc = adicionar_meses(data_inicial, i).strftime("%Y-%m-%d")
             cursor.execute("""
                 INSERT INTO financeiro (tipo, descricao, valor, parcela_atual, total_parcelas, data_vencimento, categoria, status)
                 VALUES ('Despesa', ?, ?, ?, ?, ?, ?, 'Pendente')
@@ -324,24 +330,40 @@ def registrar_pagamento(venda_id, financeiro_id, valor_pago, forma_pagamento, ob
             VALUES (?, ?, ?, ?, ?)
         """, (venda_id, financeiro_id, valor_pago, forma_pagamento, observacao))
         return cursor.lastrowid
-    # --- Cadastra uma nova despesa registrando todos os dados financeiros e permitindo parcelamento ---
-    try:
-        with conectar() as conn:
-            cursor = conn.cursor()
-            valor_parc = round(valor / parcelas, 2)
-            
-            for i in range(parcelas):
-                data_venc = (datetime.strptime(vencimento, "%Y-%m-%d") + timedelta(days=30*i)).strftime("%Y-%m-%d")
-                cursor.execute("""
-                    INSERT INTO financeiro (tipo, entidade_nome, descricao, valor, parcela_atual, total_parcelas, 
-                                           data_vencimento, forma_pagamento, categoria, status)
-                    VALUES ('Despesa', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (fornecedor, descricao, valor_parc, i+1, parcelas, data_venc, forma_pagamento, categoria, status))
-            
-            conn.commit()
-            return True, "Despesa cadastrada com sucesso!"
-    except Exception as e:
-        return False, f"Erro ao cadastrar despesa: {str(e)}"
+
+def adicionar_meses(data_obj, meses):
+    # --- Ajusta vencimento mês a mês preservando o dia quando possível ---
+    ano = data_obj.year + (data_obj.month + meses - 1) // 12
+    mes = (data_obj.month + meses - 1) % 12 + 1
+    prox_ano = ano + (mes // 12)
+    prox_mes = mes % 12 + 1
+    ultimo_dia_mes = (datetime(prox_ano, prox_mes, 1) - timedelta(days=1)).day
+    dia = min(data_obj.day, ultimo_dia_mes)
+    return datetime(ano, mes, dia)
+
+def cadastrar_despesa(fornecedor, descricao, categoria, valor, recorrencia, vencimento, forma_pagamento, status, parcelas=1):
+    # --- Insere uma nova despesa no financeiro com recorrência e/ou parcelamento mensal ---
+    def normalizar_data(data_str):
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(data_str, fmt)
+            except ValueError:
+                continue
+        raise ValueError(f"Formato de data inválido: {data_str}")
+
+    data_inicial = normalizar_data(vencimento)
+    with conectar() as conn:
+        cursor = conn.cursor()
+        valor_parc = round(valor / parcelas, 2)
+        for i in range(parcelas):
+            data_venc = adicionar_meses(data_inicial, i).strftime("%Y-%m-%d")
+            cursor.execute("""
+                INSERT INTO financeiro (tipo, entidade_nome, descricao, valor, parcela_atual, total_parcelas,
+                                       data_vencimento, forma_pagamento, categoria, status, recorrencia)
+                VALUES ('Despesa', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (fornecedor, descricao, valor_parc, i+1, parcelas, data_venc, forma_pagamento, categoria, status, recorrencia))
+        conn.commit()
+        return True, "Despesa cadastrada com sucesso!"
 
 def listar_despesas():
     # --- Retorna todas as despesas registradas no sistema com seus detalhes ---

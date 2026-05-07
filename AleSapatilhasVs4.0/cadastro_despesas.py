@@ -169,11 +169,6 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.ent_qtd_parc.insert(0, "1")
         self.ent_qtd_parc.bind("<KeyRelease>", lambda e: self.atualizar_calculo_parcela())
         
-        tk.Label(self.frame_parcelas, text="DIA DO VENC.:", bg="#E2E8F0", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(20,0))
-        self.ent_dia_venc = tk.Entry(self.frame_parcelas, width=3)
-        self.ent_dia_venc.pack(side="left", padx=5)
-        self.ent_dia_venc.insert(0, "01")
-        
         self.lbl_calculo = tk.Label(self.frame_parcelas, text="= 1x R$ 0.00", bg="#E2E8F0", font=("Segoe UI", 9, "italic"), fg=self.cor_destaque)
         self.lbl_calculo.pack(side="left", padx=10)
 
@@ -212,18 +207,20 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.atualizar_tree_busca()
 
     # --- LÓGICA ---
-    def toggle_parcelas(self, event):
-        if self.cb_recorrencia.get() == "Parcelar":
+    def toggle_parcelas(self, event=None):
+        if self.cb_recorrencia.get() != "Não Recorrente":
             self.frame_parcelas.grid(row=12, column=0, columnspan=3, sticky="ew", pady=5)
         else:
             self.frame_parcelas.grid_forget()
+        self.atualizar_calculo_parcela()
 
     def atualizar_calculo_parcela(self):
         try:
             v = float(self.ent_valor.get().replace(",", "."))
-            q = int(self.ent_qtd_parc.get())
+            q = int(self.ent_qtd_parc.get()) if self.cb_recorrencia.get() != "Não Recorrente" else 1
             self.lbl_calculo.config(text=f"= {q}x R$ {(v/q):.2f}")
-        except: self.lbl_calculo.config(text="= Erro no cálculo")
+        except Exception:
+            self.lbl_calculo.config(text="= Erro no cálculo")
 
     def atualizar_tree_busca(self):
         self.tree_busca.delete(*self.tree_busca.get_children())
@@ -243,7 +240,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
     def selecionar_da_busca(self, e):
         sel = self.tree_busca.selection()
         if not sel: return
-        id_d = self.tree_busca.item(sel)["values"][0]
+        id_d = self.tree_busca.item(sel[0])["values"][0]
         with database.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM financeiro WHERE id=?", (id_d,))
@@ -263,10 +260,10 @@ class JanelaCadastroDespesas(tk.Toplevel):
 
         try:
             if self.despesa_id:
-                database.atualizar_despesa(self.despesa_id, entidade_nome=d["ent"], descricao=d["desc"], valor=d["val"], data_vencimento=d["venc"], forma_pagamento=d["forma"], categoria=d["cat"], status=d["status"])
+                database.atualizar_despesa(self.despesa_id, entidade_nome=d["ent"], descricao=d["desc"], valor=d["val"], data_vencimento=d["venc"], forma_pagamento=d["forma"], categoria=d["cat"], status=d["status"], recorrencia=self.cb_recorrencia.get())
                 messagebox.showinfo("Sucesso", "Despesa atualizada!", parent=self)
             else:
-                parc = int(self.ent_qtd_parc.get()) if self.cb_recorrencia.get() == "Parcelar" else 1
+                parc = int(self.ent_qtd_parc.get()) if self.cb_recorrencia.get() != "Não Recorrente" else 1
                 sucesso, mensagem = database.cadastrar_despesa(d["ent"], d["desc"], d["cat"], float(d["val"]), self.cb_recorrencia.get(), d["venc"], d["forma"], d["status"], parc)
                 if not sucesso:
                     messagebox.showerror("Erro", mensagem, parent=self)
@@ -288,6 +285,11 @@ class JanelaCadastroDespesas(tk.Toplevel):
         self.cb_forma.set(d[10] if d[10] else "Dinheiro")
         self.cb_cat.set(d[11] if d[11] else "Outros")
         self.cb_status.set(d[12])
+        recorrencia = d[13] if len(d) > 13 else ("Parcelar" if d[7] > 1 else "Não Recorrente")
+        self.cb_recorrencia.set(recorrencia)
+        self.ent_qtd_parc.delete(0, tk.END)
+        self.ent_qtd_parc.insert(0, str(d[7] if d[7] > 1 else 1))
+        self.toggle_parcelas()
         self.btn_salvar.config(text="ATUALIZAR DESPESA", bg=self.cor_hover_field)
 
         # Preencher histórico de parcelas
@@ -311,7 +313,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
         """Editar despesa/receita com duplo clique - distingue tipo"""
         sel = self.tree_busca.selection()
         if not sel: return
-        id_item = self.tree_busca.item(sel)["values"][0]
+        id_item = self.tree_busca.item(sel[0])["values"][0]
         
         # Verificar se é receita ou despesa
         with database.conectar() as conn:
@@ -382,7 +384,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
         """Quitar despesa via menu de contexto"""
         sel = self.tree_busca.selection()
         if not sel: return
-        id_d = self.tree_busca.item(sel)["values"][0]
+        id_d = self.tree_busca.item(sel[0])["values"][0]
         
         if messagebox.askyesno("Confirmar", "Deseja quitar esta despesa?"):
             try:
@@ -398,7 +400,7 @@ class JanelaCadastroDespesas(tk.Toplevel):
         """Restaurar despesa via menu de contexto"""
         sel = self.tree_busca.selection()
         if not sel: return
-        id_d = self.tree_busca.item(sel)["values"][0]
+        id_d = self.tree_busca.item(sel[0])["values"][0]
         
         # Buscar status atual
         with database.conectar() as conn:
@@ -442,7 +444,7 @@ class VisualizarRecibo(tk.Toplevel):
         
         self.title("Recibo de Venda")
         self.configure(bg=self.bg_fundo)
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=400, altura_desejada=500)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=560, altura_desejada=620)
         
         # Buscar dados da venda
         with database.conectar() as conn:

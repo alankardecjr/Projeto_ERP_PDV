@@ -59,38 +59,42 @@ def popular_banco():
     # --- 15 DESPESAS FIXAS ---
     hoje = datetime.now().strftime("%Y-%m-%d")
     despesas_fixas = [
-        ("Aluguel", 3200.00, "Fixa", hoje, 1),
-        ("Energia Elétrica", 520.00, "Fixa", hoje, 1),
-        ("Água", 180.00, "Fixa", hoje, 1),
-        ("Internet/Telefone", 190.00, "Fixa", hoje, 1),
-        ("Segurança", 420.00, "Fixa", hoje, 1),
-        ("Limpeza", 260.00, "Fixa", hoje, 1),
-        ("Salário Administrativo", 3200.00, "Fixa", hoje, 1),
-        ("Contabilidade", 650.00, "Fixa", hoje, 1),
-        ("Seguro da Loja", 250.00, "Fixa", hoje, 1),
-        ("Licenças de Software", 180.00, "Fixa", hoje, 1),
-        ("Manutenção de Equipamentos", 230.00, "Fixa", hoje, 1),
-        ("Marketing Mensal", 490.00, "Fixa", hoje, 1),
-        ("Assinatura de Sistemas", 140.00, "Fixa", hoje, 1),
-        ("Impostos Municipais", 380.00, "Fixa", hoje, 1),
-        ("Taxas de Cartão", 290.00, "Fixa", hoje, 1),
+        ("Fornecedor Genérico", "Aluguel", "Infraestrutura", 3200.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Energia Elétrica", "Infraestrutura", 520.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Água", "Infraestrutura", 180.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Internet/Telefone", "Infraestrutura", 190.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Segurança", "Infraestrutura", 420.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Limpeza", "Infraestrutura", 260.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Salário Administrativo", "Salários", 3200.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Contabilidade", "Outros", 650.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Seguro da Loja", "Outros", 250.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Licenças de Software", "Outros", 180.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Manutenção de Equipamentos", "Infraestrutura", 230.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Marketing Mensal", "Marketing", 490.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Assinatura de Sistemas", "Outros", 140.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Impostos Municipais", "Impostos", 380.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Taxas de Cartão", "Outros", 290.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
     ]
     for despesa in despesas_fixas:
-        database.lancar_despesa(*despesa)
+        sucesso, msg = database.cadastrar_despesa(*despesa)
+        if not sucesso:
+            print(f"Aviso despesa: {msg}")
 
     # --- 8 DESPESAS VARIÁVEIS ---
     despesas_variaveis = [
-        ("Compra de Mercadorias", 7200.00, "Variável", hoje, 1),
-        ("Compra de Insumos", 1800.00, "Variável", hoje, 1),
-        ("Frete de Recebimento", 420.00, "Variável", hoje, 1),
-        ("Material de Embalagem", 220.00, "Variável", hoje, 1),
-        ("Peças de Reposição", 310.00, "Variável", hoje, 1),
-        ("Comissão de Vendedores", 360.00, "Variável", hoje, 1),
-        ("Ajuste de Estoque", 780.00, "Variável", hoje, 1),
-        ("Brindes para Clientes", 210.00, "Variável", hoje, 1),
+        ("Fornecedor Genérico", "Compra de Mercadorias", "Compra Mercadoria", 7200.00, "Parcelar", hoje, "Cartão de Crédito", "Pendente", 3),
+        ("Fornecedor Genérico", "Compra de Insumos", "Compra Mercadoria", 1800.00, "Não Recorrente", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Frete de Recebimento", "Compra Mercadoria", 420.00, "Não Recorrente", hoje, "Pix", "Pendente", 1),
+        ("Fornecedor Genérico", "Material de Embalagem", "Compra Mercadoria", 220.00, "Não Recorrente", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Peças de Reposição", "Infraestrutura", 310.00, "Não Recorrente", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Comissão de Vendedores", "Salários", 360.00, "Não Recorrente", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Ajuste de Estoque", "Outros", 780.00, "Não Recorrente", hoje, "Dinheiro", "Pendente", 1),
+        ("Fornecedor Genérico", "Brindes para Clientes", "Marketing", 210.00, "Não Recorrente", hoje, "Dinheiro", "Pendente", 1),
     ]
     for despesa in despesas_variaveis:
-        database.lancar_despesa(*despesa)
+        sucesso, msg = database.cadastrar_despesa(*despesa)
+        if not sucesso:
+            print(f"Aviso despesa: {msg}")
 
     # --- 8 VENDAS DE TESTE ---
     formas_pag = ["Cartão", "Dinheiro", "Pix"]
