@@ -448,8 +448,10 @@ class VisualizarRecibo(tk.Toplevel):
         with database.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT v.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda,
-                       GROUP_CONCAT(p.produto || ' (' || vi.quantidade || 'x R$ ' || vi.preco_unitario || ')', ', ') as produtos
+                SELECT v.id, c.nome, c.cpf, c.telefone, c.email, c.aniversario, c.tamanho_calcado, 
+                       c.endereco_completo, c.bairro, c.cidade, c.cep, c.observacao, c.limite_credito, c.status_cliente,
+                       v.valor_bruto, v.desconto, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.data_venda, v.status_venda, v.vendedor,
+                       GROUP_CONCAT(p.produto || ' (' || vi.quantidade || 'x R$ ' || vi.preco_unitario || ' = R$ ' || vi.subtotal || ')', '\n') as produtos
                 FROM vendas v
                 JOIN clientes c ON v.cliente_id = c.id
                 JOIN itens_venda vi ON v.id = vi.venda_id
@@ -468,28 +470,45 @@ class VisualizarRecibo(tk.Toplevel):
         main_frame = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=20)
         main_frame.pack(fill="both", expand=True)
         
-        tk.Label(main_frame, text="🧾 RECIBO DE VENDA", bg=self.bg_fundo, 
+        tk.Label(main_frame, text="🧾 DETALHES DA VENDA", bg=self.bg_fundo, 
                  fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
         
-        # Informações da venda
+        # Informações da venda e cliente
         info_text = f"""
+=== DADOS DA VENDA ===
 ID da Venda: {dados[0]}
-Cliente: {dados[1]}
-Telefone: {dados[2]}
-Data: {dados[7]}
+Data: {dados[18]}
+Status: {dados[20]}
+Vendedor: {dados[21] or 'N/A'}
 
-Produtos:
-{dados[8].replace(',', '\n')}
+=== DADOS DO CLIENTE ===
+Nome: {dados[1]}
+CPF: {dados[2]}
+Telefone: {dados[3]}
+Email: {dados[4] or 'N/A'}
+Aniversário: {dados[5] or 'N/A'}
+Tamanho Calçado: {dados[6] or 'N/A'}
+Endereço: {dados[7] or 'N/A'}
+Bairro: {dados[8] or 'N/A'}
+Cidade: {dados[9] or 'N/A'}
+CEP: {dados[10] or 'N/A'}
+Observação: {dados[11] or 'N/A'}
+Limite de Crédito: R$ {dados[12]:.2f}
+Status Cliente: {dados[13]}
 
-Forma de Pagamento: {dados[4]}
-Parcelas: {dados[5]}x
-Desconto: R$ {dados[6]:.2f}
+=== DADOS FINANCEIROS ===
+Valor Bruto: R$ {dados[14]:.2f}
+Desconto: R$ {dados[15]:.2f}
+Valor Total: R$ {dados[16]:.2f}
+Forma de Pagamento: {dados[17]}
+Parcelas: {dados[19]}x
 
-TOTAL: R$ {dados[3]:.2f}
+=== PRODUTOS VENDIDOS ===
+{dados[22]}
         """
         
         lbl_info = tk.Label(main_frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto,
-                           font=("Courier New", 10), justify="left", relief="solid", borderwidth=1)
+                           font=("Courier New", 9), justify="left", relief="solid", borderwidth=1)
         lbl_info.pack(fill="both", expand=True, pady=(0, 20))
         
         # Botão fechar

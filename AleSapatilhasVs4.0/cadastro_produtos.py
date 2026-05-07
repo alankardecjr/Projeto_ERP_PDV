@@ -185,6 +185,8 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.cb_cor = criar_combo(frame_grade, "COR*", self.list_cores, 0, 0, 2)
         self.cb_tam = criar_combo(frame_grade, "TAMANHO*", self.list_tamanhos, 2, 0, 2)
         self.ent_qtd = criar_campo(frame_grade, "QUANTIDADE*", 4, col=0, colspan=1)
+        self.lbl_qtd_atual = tk.Label(frame_grade, text="", bg=self.bg_card, fg=self.cor_lbl, font=("Segoe UI", 8), anchor="w")
+        self.lbl_qtd_atual.grid(row=6, column=0, columnspan=2, sticky="w", pady=(2, 0))
 
         # --- ESPAÇO PARA FOTO (lado direito) ---
         frame_foto = tk.LabelFrame(frame_conteudo, bg=self.bg_card, relief="groove", borderwidth=1, padx=10, pady=10, text="Foto")
@@ -226,10 +228,14 @@ class JanelaCadastroProdutos(tk.Toplevel):
 
         # --- Menu de contexto (botão direito) ---
         self.menu_contexto = tk.Menu(self, tearoff=0)
-        self.menu_contexto.add_command(label="Editar", command=self.editar_produto_menu)
-        self.menu_contexto.add_command(label="Indisponibilizar", command=self.indisponibilizar_produto_menu)
-        self.menu_contexto.add_command(label="Promocional", command=self.promocional_produto_menu)
-        self.menu_contexto.add_command(label="Restaurar", command=self.restaurar_produto_menu)
+        self.menu_contexto.add_command(label="Editar Item", command=self.editar_produto_menu)
+        self.menu_contexto.add_command(label="Visualizar Item", command=self.visualizar_produto_menu)
+        self.menu_contexto.add_separator()
+        self.menu_contexto.add_command(label="✓ Disponível", command=self.disponibilizar_produto_menu)
+        self.menu_contexto.add_command(label="✗ Indisponível", command=self.indisponibilizar_produto_menu)
+        self.menu_contexto.add_command(label="⊘ Esgotado", command=self.esgotado_produto_menu)
+        self.menu_contexto.add_command(label="⭐ Promocional", command=self.promocional_produto_menu)
+        self.menu_contexto.add_command(label="🔄 Restaurar", command=self.restaurar_produto_menu)
         self.menu_contexto.add_separator()
         self.menu_contexto.add_command(label="Sair", command=self.destroy)
 
@@ -291,11 +297,24 @@ class JanelaCadastroProdutos(tk.Toplevel):
                 "status": self.var_status.get()
             }
 
-            if not all([d["produto"], d["cor"], d["custo"], d["qtd"]]):
+            if not d["produto"] or not d["cor"] or not d["custo"]:
                 messagebox.showwarning("Atenção", "Preencha os campos obrigatórios.", parent=self)
                 return
+            if self.produto_id:
+                if d["qtd"] < 0:
+                    messagebox.showwarning("Atenção", "Quantidade deve ser zero ou positiva.", parent=self)
+                    return
+            else:
+                if d["qtd"] <= 0:
+                    messagebox.showwarning("Atenção", "Quantidade deve ser maior que zero para cadastrar um novo produto.", parent=self)
+                    return
+
+            # Gerar SKU se necessário
+            if not d["sku"]:
+                d["sku"] = self._gerar_sku_novo(d["produto"], d["cor"])
 
             if self.produto_id:
+                # Lógica de atualização
                 with database.conectar() as conn:
                     cursor = conn.cursor()
                     cursor.execute("SELECT sku, produto, cor, tamanho, precocusto, precovenda, categoria, material, fornecedor, status_item, quantidade FROM produtos WHERE id = ?", (self.produto_id,))
@@ -305,43 +324,115 @@ class JanelaCadastroProdutos(tk.Toplevel):
                     messagebox.showerror("Erro", "Produto não encontrado para atualização.", parent=self)
                     return
 
-                mesmo_item = (
-                    atual[0] == d["sku"] and atual[1] == d["produto"] and atual[2] == d["cor"] and str(atual[3]) == str(d["tam"]) and
-                    float(atual[4]) == float(d["custo"]) and float(atual[5]) == float(d["venda"]) and atual[6] == d["cat"] and
-                    atual[7] == d["mat"] and atual[8] == d["forn"] and atual[9] == d["status"]
-                )
-
-                if mesmo_item:
-                    nova_qtde = atual[10] + d["qtd"]
-                    database.atualizar_produto(
-                        self.produto_id, sku=d["sku"], produto=d["produto"], cor=d["cor"],
-                        tamanho=d["tam"], precocusto=d["custo"], precovenda=d["venda"],
-                        quantidade=nova_qtde, categoria=d["cat"], material=d["mat"],
-                        fornecedor=d["forn"], status_item=d["status"]
+                # Verificar se descrição do modelo é igual
+                descricao_igual = atual[1].lower() == d["produto"].lower()
+                
+                if descricao_igual:
+                    # Mesmo modelo - verificar se atributos são iguais
+                    atributos_iguais = (
+                        atual[2] == d["cor"] and str(atual[3]) == str(d["tam"]) and
+                        atual[6] == d["cat"] and atual[7] == d["mat"] and atual[8] == d["forn"]
                     )
-                    messagebox.showinfo("Sucesso", "Quantidade somada ao estoque do mesmo produto.", parent=self)
+                    
+                    if atributos_iguais:
+                        # Atributos iguais - verificar se preço, status ou quantidade mudaram
+                        preco_mudou = float(atual[4]) != float(d["custo"]) or float(atual[5]) != float(d["venda"])
+                        status_mudou = atual[9] != d["status"]
+                        qtd_add = d["qtd"]
+                        
+                        if not preco_mudou and not status_mudou and qtd_add == 0:
+                            messagebox.showinfo("Info", "Nenhuma alteração detectada.", parent=self)
+                        else:
+                            nova_qtde = atual[10] + qtd_add
+                            database.atualizar_produto(
+                                self.produto_id, 
+                                precocusto=d["custo"], 
+                                precovenda=d["venda"],
+                                quantidade=nova_qtde, 
+                                status_item=d["status"]
+                            )
+                            
+                            if (preco_mudou or qtd_add > 0) and d["qtd"] > 0:
+                                valor_despesa = float(d["custo"]) * qtd_add
+                                database.lancar_despesa(
+                                    f"Compra de {d['produto']} - Reposição de Estoque", 
+                                    valor_despesa, 
+                                    "Compra Mercadoria", 
+                                    self.ent_data_lancamento.get(),
+                                    1
+                                )
+                            
+                            messagebox.showinfo("Sucesso", "Preço/status atualizados e quantidade somada ao estoque.", parent=self)
+                    else:
+                        # Atributos diferentes - gerar novo SKU
+                        novo_sku = self._gerar_sku_variacao(d["sku"])
+                        criado = database.cadastrar_produto(
+                            novo_sku, d["produto"], d["cor"], d["tam"],
+                            d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"], getattr(self, 'caminho_foto', '')
+                        )
+                        if not criado:
+                            messagebox.showerror("Erro", "Falha ao cadastrar nova variação do produto.", parent=self)
+                            return
+                        
+                        # Lançar despesa para nova variação
+                        valor_despesa = float(d["custo"]) * d["qtd"]
+                        database.lancar_despesa(
+                            f"Compra de {d['produto']} - Nova Variação", 
+                            valor_despesa, 
+                            "Compra Mercadoria", 
+                            self.ent_data_lancamento.get(),
+                            1
+                        )
+                        
+                        messagebox.showinfo("Sucesso", "Nova variação cadastrada com SKU diferente.", parent=self)
                 else:
-                    novo_sku = d["sku"] if atual[0] != d["sku"] else self._gerar_sku_variacao(d["sku"])
+                    # Descrição diferente - sempre novo SKU
+                    novo_sku = self._gerar_sku_novo(d["produto"], d["cor"])
                     criado = database.cadastrar_produto(
                         novo_sku, d["produto"], d["cor"], d["tam"],
                         d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"], getattr(self, 'caminho_foto', '')
                     )
                     if not criado:
-                        messagebox.showerror("Erro", "Falha ao cadastrar novo SKU do produto. Verifique os dados.", parent=self)
+                        messagebox.showerror("Erro", "Falha ao cadastrar novo produto.", parent=self)
                         return
-                    messagebox.showinfo("Sucesso", "Atributos diferentes salvos como novo SKU.", parent=self)
+                    
+                    # Lançar despesa
+                    valor_despesa = float(d["custo"]) * d["qtd"]
+                    database.lancar_despesa(
+                        f"Compra de {d['produto']} - Novo Produto", 
+                        valor_despesa, 
+                        "Compra Mercadoria", 
+                        self.ent_data_lancamento.get(),
+                        1
+                    )
+                    
+                    messagebox.showinfo("Sucesso", "Novo produto cadastrado.", parent=self)
             else:
+                # Novo produto
                 criado = database.cadastrar_produto(
                     d["sku"], d["produto"], d["cor"], d["tam"], 
                     d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"], getattr(self, 'caminho_foto', '')
                 )
                 if not criado:
-                    messagebox.showerror("Erro", "Falha ao cadastrar produto. Verifique o SKU e tente novamente.", parent=self)
+                    messagebox.showerror("Erro", "Falha ao cadastrar produto.", parent=self)
                     return
+                
+                # Lançar despesa
+                valor_despesa = float(d["custo"]) * d["qtd"]
+                database.lancar_despesa(
+                    f"Compra de {d['produto']} - Novo Produto", 
+                    valor_despesa, 
+                    "Compra Mercadoria", 
+                    self.ent_data_lancamento.get(),
+                    1
+                )
+                
                 messagebox.showinfo("Sucesso", "Produto cadastrado!", parent=self)
 
             if hasattr(self.master, "exibir_produtos"):
                 self.master.exibir_produtos()
+            if hasattr(self.master, "exibir_financeiro"):
+                self.master.exibir_financeiro()
             self.destroy()
         except Exception as e:
             messagebox.showerror("Erro", f"Falha ao salvar: {e}", parent=self)
@@ -353,11 +444,14 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.cb_cor.set(d[3]); self.cb_tam.set(str(d[4]))
         self.ent_custo.delete(0, tk.END); self.ent_custo.insert(0, f"{d[5]:.2f}")
         self.ent_venda.delete(0, tk.END); self.ent_venda.insert(0, f"{d[6]:.2f}")
-        self.ent_qtd.delete(0, tk.END); self.ent_qtd.insert(0, d[7])
+        quantidade_atual = d[7]
+        self.ent_qtd.delete(0, tk.END)
+        self.ent_qtd.insert(0, "0")
+        self.lbl_qtd_atual.config(text=f"Quantidade atual em estoque: {quantidade_atual}")
         self.cb_cat.set(d[8]); self.cb_mat.set(d[9])
         self.ent_forn.delete(0, tk.END); self.ent_forn.insert(0, d[10] if d[10] else "")
         self.var_status.set(d[11])
-        self.caminho_foto = d[13] if len(d) > 13 else ""
+        self.caminho_foto = d[12] if len(d) > 12 else ""
         if self.caminho_foto:
             self.exibir_foto_preview()
         self.btn_salvar.config(text="ATUALIZAR PRODUTO", bg=self.cor_hover_field)
@@ -392,31 +486,74 @@ class JanelaCadastroProdutos(tk.Toplevel):
 
     def gerar_sku_automatico(self):
         """Gera SKU automaticamente baseado nos dados do produto"""
-        produto = self.ent_produto.get().strip()[:3].upper() if self.ent_produto.get().strip() else "XXX"
-        cor = self.cb_cor.get()[:2].upper() if self.cb_cor.get() else "XX"
-        tam = self.cb_tam.get() if self.cb_tam.get() else "XX"
-        categoria = self.cb_cat.get()[:2].upper() if self.cb_cat.get() else "XX"
+        produto = self.ent_produto.get().strip()
+        cor = self.cb_cor.get()
         
-        # Formato: PRODUTO-COR-TAMANHO-CATEGORIA
-        sku = f"{produto}-{cor}-{tam}-{categoria}"
-        self.ent_sku.config(state="normal")
-        self.ent_sku.delete(0, tk.END)
-        self.ent_sku.insert(0, sku)
-        self.ent_sku.config(state="readonly")
+        if produto and cor:
+            sku = self._gerar_sku_novo(produto, cor)
+            self.ent_sku.config(state="normal")
+            self.ent_sku.delete(0, tk.END)
+            self.ent_sku.insert(0, sku)
+            self.ent_sku.config(state="readonly")
 
-    def _gerar_sku_variacao(self, sku_base):
-        """Gera um novo SKU único quando atributos mudam mas o SKU base já existe."""
-        base = sku_base
-        if '_' in sku_base and sku_base.rsplit('_', 1)[1].isdigit():
-            base = sku_base.rsplit('_', 1)[0]
-        suffix = 1
-        novo_sku = f"{base}_{suffix}"
+    def _gerar_sku_novo(self, produto, cor):
+        """Gera novo SKU baseado na descrição e cor"""
+        # Três primeiras letras de cada palavra da descrição
+        palavras = produto.split()
+        parte_produto = ''.join(palavra[:3].upper() for palavra in palavras)
+        
+        # Três primeiras letras da cor
+        parte_cor = cor[:3].upper()
+        
+        # Gerar sequência numérica única
+        sequencia = self._gerar_sequencia_numerica()
+        
+        return f"{parte_produto}{sequencia}{parte_cor}"
+
+    def _gerar_sequencia_numerica(self):
+        """Gera uma sequência de 4 números únicos"""
         with database.conectar() as conn:
             cursor = conn.cursor()
-            while cursor.execute("SELECT 1 FROM produtos WHERE sku = ?", (novo_sku,)).fetchone():
-                suffix += 1
-                novo_sku = f"{base}_{suffix}"
-        return novo_sku
+            # Encontrar o maior número usado em SKUs existentes
+            cursor.execute("SELECT sku FROM produtos")
+            skus_existentes = cursor.fetchall()
+            
+            max_num = 0
+            for sku_row in skus_existentes:
+                sku = sku_row[0]
+                # Verificar se o SKU segue o padrão novo (letras + 4 números + letras)
+                if len(sku) >= 7 and sku[:-7].isalpha() and sku[-3:].isalpha() and sku[-7:-3].isdigit():
+                    parte_numerica = sku[-7:-3]
+                    if parte_numerica.isdigit():
+                        max_num = max(max_num, int(parte_numerica))
+            
+            return f"{max_num + 1:04d}"
+
+    def _gerar_sku_variacao(self, sku_base):
+        """Gera um novo SKU único quando atributos mudam mas o produto é o mesmo."""
+        # Para variações, manter a base do produto e cor, mas incrementar a sequência
+        if len(sku_base) >= 7:
+            parte_produto = sku_base[:-7]  # tudo menos os últimos 7 caracteres
+            parte_cor = sku_base[-3:]      # últimos 3 caracteres (cor)
+            parte_numerica = sku_base[-7:-3]  # 4 dígitos do meio
+            
+            if parte_numerica.isdigit():
+                novo_num = int(parte_numerica) + 1
+                novo_sku = f"{parte_produto}{novo_num:04d}{parte_cor}"
+                
+                # Verificar se já existe
+                with database.conectar() as conn:
+                    cursor = conn.cursor()
+                    while cursor.execute("SELECT 1 FROM produtos WHERE sku = ?", (novo_sku,)).fetchone():
+                        novo_num += 1
+                        novo_sku = f"{parte_produto}{novo_num:04d}{parte_cor}"
+                
+                return novo_sku
+        
+        # Fallback: gerar completamente novo
+        produto = self.ent_produto.get().strip()
+        cor = self.cb_cor.get()
+        return self._gerar_sku_novo(produto, cor)
 
     def selecionar_foto(self, event):
         """Selecionar foto da galeria e copiar para pasta images"""
@@ -478,6 +615,21 @@ class JanelaCadastroProdutos(tk.Toplevel):
         if messagebox.askyesno("Confirmar", "Deseja editar este produto?", parent=self):
             self.editar_produto_duplo_clique(None)
 
+    def visualizar_produto_menu(self):
+        """Visualizar produto via menu de contexto"""
+        selecao = self.tree_busca.selection()
+        if not selecao: return
+        id_prod = self.tree_busca.item(selecao)["values"][0]
+        
+        # Buscar dados completos do produto
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_prod,))
+            dados = cursor.fetchone()
+        
+        if dados:
+            VisualizarProduto(self, dados)
+
     def _manter_em_primeiro_plano(self):
         try:
             self.attributes("-topmost", True)
@@ -490,15 +642,15 @@ class JanelaCadastroProdutos(tk.Toplevel):
         if not selecao: return
         id_prod = self.tree_busca.item(selecao)["values"][0]
         
-        if messagebox.askyesno("Confirmar", "Deseja indisponibilizar este produto?"):
+        if messagebox.askyesno("Confirmar", "Deseja indisponibilizar este item?", parent=self):
             try:
                 database.atualizar_produto(id_prod, status_item="Indisponível")
-                messagebox.showinfo("Sucesso", "Produto indisponibilizado!", parent=self)
+                messagebox.showinfo("Sucesso", "Item indisponibilizado!", parent=self)
                 self.atualizar_tree_busca()
                 if hasattr(self.master, "exibir_produtos"):
                     self.master.exibir_produtos()
             except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao indisponibilizar produto: {str(e)}", parent=self)
+                messagebox.showerror("Erro", f"Erro ao indisponibilizar item: {str(e)}", parent=self)
 
     def promocional_produto_menu(self):
         """Marcar produto como promocional via menu de contexto"""
@@ -506,15 +658,15 @@ class JanelaCadastroProdutos(tk.Toplevel):
         if not selecao: return
         id_prod = self.tree_busca.item(selecao)["values"][0]
         
-        if messagebox.askyesno("Confirmar", "Deseja marcar este produto como promocional?"):
+        if messagebox.askyesno("Confirmar", "Deseja marcar este item como promocional?", parent=self):
             try:
                 database.atualizar_produto(id_prod, status_item="Promocional")
-                messagebox.showinfo("Sucesso", "Produto marcado como promocional!", parent=self)
+                messagebox.showinfo("Sucesso", "Item marcado como promocional!", parent=self)
                 self.atualizar_tree_busca()
                 if hasattr(self.master, "exibir_produtos"):
                     self.master.exibir_produtos()
             except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao marcar produto como promocional: {str(e)}", parent=self)
+                messagebox.showerror("Erro", f"Erro ao marcar item como promocional: {str(e)}", parent=self)
 
     def restaurar_produto_menu(self):
         """Restaurar produto via menu de contexto"""
@@ -533,19 +685,72 @@ class JanelaCadastroProdutos(tk.Toplevel):
             novo_status = "Disponível"
         elif status_atual == "Esgotado":
             novo_status = "Disponível"
+        elif status_atual == "Promocional":
+            novo_status = "Disponível"
         else:
             messagebox.showinfo("Info", "Não há status anterior para restaurar.", parent=self)
             return
         
-        if messagebox.askyesno("Confirmar", f"Restaurar produto para '{novo_status}'?"):
+        if messagebox.askyesno("Confirmar", f"Restaurar item para '{novo_status}'?", parent=self):
             try:
                 database.atualizar_produto(id_prod, status_item=novo_status)
-                messagebox.showinfo("Sucesso", "Produto restaurado!", parent=self)
+                messagebox.showinfo("Sucesso", "Item restaurado!", parent=self)
                 self.atualizar_tree_busca()
                 if hasattr(self.master, "exibir_produtos"):
                     self.master.exibir_produtos()
             except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao restaurar produto: {str(e)}", parent=self)
+                messagebox.showerror("Erro", f"Erro ao restaurar item: {str(e)}", parent=self)
+
+
+class VisualizarProduto(tk.Toplevel):
+    """Classe para visualizar detalhes do produto"""
+    def __init__(self, master, dados_produto):
+        super().__init__(master)
+        
+        # --- Paleta de cores ---
+        paleta = ui_utils.get_paleta()
+        self.bg_fundo = paleta["bg_fundo"]
+        self.bg_card = paleta["bg_card"]
+        self.cor_texto = paleta["cor_texto"]
+        self.cor_destaque = paleta["cor_destaque"]
+        
+        self.title("Detalhes do Produto")
+        self.configure(bg=self.bg_fundo)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=500, altura_desejada=600)
+        
+        # Criar interface
+        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=20)
+        main_frame.pack(fill="both", expand=True)
+        
+        tk.Label(main_frame, text="📦 DETALHES DO PRODUTO", bg=self.bg_fundo, 
+                 fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
+        
+        # Informações do produto
+        info_text = f"""
+SKU: {dados_produto[1] or 'N/A'}
+Produto: {dados_produto[2]}
+Cor: {dados_produto[3]}
+Tamanho: {dados_produto[4]}
+Preço de Custo: R$ {dados_produto[5]:.2f}
+Preço de Venda: R$ {dados_produto[6]:.2f}
+Quantidade em Estoque: {dados_produto[7]}
+Categoria: {dados_produto[8] or 'N/A'}
+Material: {dados_produto[9] or 'N/A'}
+Fornecedor: {dados_produto[10] or 'N/A'}
+Status: {dados_produto[11]}
+Última Atualização: {dados_produto[12] if len(dados_produto) > 12 else 'N/A'}
+        """
+        
+        lbl_info = tk.Label(main_frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto,
+                           font=("Courier New", 10), justify="left", relief="solid", borderwidth=1)
+        lbl_info.pack(fill="both", expand=True, pady=(0, 20))
+        
+        # Botão fechar
+        tk.Button(main_frame, text="FECHAR", bg=self.cor_destaque, fg="white",
+                 font=("Segoe UI", 10, "bold"), command=self.destroy).pack()
+        
+        self.grab_set()
+
 
 if __name__ == "__main__":
     root = tk.Tk()

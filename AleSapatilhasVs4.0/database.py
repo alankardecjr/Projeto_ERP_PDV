@@ -294,11 +294,20 @@ def quitar_titulo_financeiro(financeiro_id, forma_pgto):
 
 def lancar_despesa(descricao, valor, categoria, vencimento, parcelas=1):
     # --- Cria lançamentos de saída financeira no sistema, permitindo o rateio de valores em várias parcelas mensais ---
+    def normalizar_data(data_str):
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(data_str, fmt)
+            except ValueError:
+                continue
+        raise ValueError(f"Formato de data inválido: {data_str}")
+
+    data_inicial = normalizar_data(vencimento)
     with conectar() as conn:
         cursor = conn.cursor()
         valor_parc = round(valor / parcelas, 2)
         for i in range(parcelas):
-            data_venc = (datetime.strptime(vencimento, "%Y-%m-%d") + timedelta(days=30*i)).strftime("%Y-%m-%d")
+            data_venc = (data_inicial + timedelta(days=30*i)).strftime("%Y-%m-%d")
             cursor.execute("""
                 INSERT INTO financeiro (tipo, descricao, valor, parcela_atual, total_parcelas, data_vencimento, categoria, status)
                 VALUES ('Despesa', ?, ?, ?, ?, ?, ?, 'Pendente')

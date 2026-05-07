@@ -338,7 +338,8 @@ class SistemaAleSapatilhas:
                 menu.add_command(label="Sair", command=lambda: None)
                 
             elif self.modo_atual == "produtos":
-                menu.add_command(label="Editar", command=self.editar_selecionado)
+                menu.add_command(label="Editar Item", command=self.editar_selecionado)
+                menu.add_command(label="Visualizar Item", command=self.visualizar_item)
                 menu.add_separator()
                 menu.add_command(label="✓ Disponível", command=lambda: self._mudar_status_produto("Disponível"))
                 menu.add_command(label="✗ Indisponível", command=lambda: self._mudar_status_produto("Indisponível"))
@@ -652,6 +653,19 @@ class SistemaAleSapatilhas:
         
         from cadastro_despesas import VisualizarRecibo
         VisualizarRecibo(self.root, id_venda=id_banco)
+
+    def visualizar_item(self):
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+        
+        from cadastro_produtos import VisualizarProduto
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_banco,))
+            dados = cursor.fetchone()
+            if dados:
+                VisualizarProduto(self.root, dados)
 
     def confirmar_saida(self):
         if messagebox.askyesno("Sair", "Deseja encerrar o sistema Ale Sapatilhas?", parent=self.root):
