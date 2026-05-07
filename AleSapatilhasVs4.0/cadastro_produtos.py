@@ -196,6 +196,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
                                 relief="flat", cursor="hand2", width=15, height=6)
         self.lbl_foto.pack(expand=True, fill="both", padx=5, pady=5)
         self.lbl_foto.bind("<Button-1>", self.selecionar_foto)
+        self.lbl_foto.bind("<Button-3>", self.menu_contexto_foto)
 
         # --- Campo SKU (no final, apenas visualização) ---
         tk.Label(main_frame, text="CÓDIGO DO PRODUTO (SKU)", bg=self.bg_fundo, fg=self.cor_lbl, 
@@ -356,7 +357,38 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.cb_cat.set(d[8]); self.cb_mat.set(d[9])
         self.ent_forn.delete(0, tk.END); self.ent_forn.insert(0, d[10] if d[10] else "")
         self.var_status.set(d[11])
+        self.caminho_foto = d[13] if len(d) > 13 else ""
+        if self.caminho_foto:
+            self.exibir_foto_preview()
         self.btn_salvar.config(text="ATUALIZAR PRODUTO", bg=self.cor_hover_field)
+
+    def exibir_foto_preview(self):
+        """Carrega e exibe a foto do produto no Label"""
+        if not self.caminho_foto or not os.path.exists(self.caminho_foto):
+            self.lbl_foto.config(text="📷\n\nClique para\nadicionar foto", image="", compound="top")
+            return
+        try:
+            img = Image.open(self.caminho_foto)
+            img = img.resize((150, 150), Image.Resampling.LANCZOS)
+            self.foto_tk = tk.PhotoImage(img)
+            self.lbl_foto.config(image=self.foto_tk, text="", compound="center")
+        except Exception as e:
+            self.lbl_foto.config(text=f"Erro ao carregar\nfoto: {str(e)[:20]}", image="")
+
+    def menu_contexto_foto(self, event):
+        """Menu de contexto para a foto"""
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="Nova foto", command=self.selecionar_foto)
+        menu.add_command(label="Excluir foto", command=self.excluir_foto)
+        menu.add_separator()
+        menu.add_command(label="Sair", command=lambda: None)
+        menu.post(event.x_root, event.y_root)
+
+    def excluir_foto(self):
+        """Remove a foto do produto"""
+        if messagebox.askyesno("Confirmar", "Deseja realmente excluir a foto?", parent=self):
+            self.caminho_foto = ""
+            self.lbl_foto.config(text="📷\n\nClique para\nadicionar foto", image="")
 
     def gerar_sku_automatico(self):
         """Gera SKU automaticamente baseado nos dados do produto"""

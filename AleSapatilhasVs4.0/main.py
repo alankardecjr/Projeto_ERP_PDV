@@ -329,28 +329,41 @@ class SistemaAleSapatilhas:
             
             if self.modo_atual == "clientes":
                 menu.add_command(label="Editar", command=self.editar_selecionado)
-                menu.add_command(label="Bloquear", command=self.bloquear_cliente)
-                menu.add_command(label="Restaurar", command=self.restaurar_cliente)
+                menu.add_separator()
+                menu.add_command(label="✓ Ativo", command=lambda: self._mudar_status_cliente("Ativo"))
+                menu.add_command(label="★ VIP", command=lambda: self._mudar_status_cliente("Vip"))
+                menu.add_command(label="⛔ Bloqueado", command=lambda: self._mudar_status_cliente("Bloqueado"))
+                menu.add_command(label="✗ Inativo", command=lambda: self._mudar_status_cliente("Inativo"))
                 menu.add_separator()
                 menu.add_command(label="Sair", command=lambda: None)
                 
             elif self.modo_atual == "produtos":
                 menu.add_command(label="Editar", command=self.editar_selecionado)
-                menu.add_command(label="Indisponibilizar", command=self.indisponibilizar_produto)
-                menu.add_command(label="Restaurar", command=self.restaurar_produto)
+                menu.add_separator()
+                menu.add_command(label="✓ Disponível", command=lambda: self._mudar_status_produto("Disponível"))
+                menu.add_command(label="✗ Indisponível", command=lambda: self._mudar_status_produto("Indisponível"))
+                menu.add_command(label="⊘ Esgotado", command=lambda: self._mudar_status_produto("Esgotado"))
+                menu.add_command(label="⭐ Promocional", command=lambda: self._mudar_status_produto("Promocional"))
                 menu.add_separator()
                 menu.add_command(label="Sair", command=lambda: None)
                 
             elif self.modo_atual == "financeiro":
                 menu.add_command(label="Editar", command=self.editar_despesa)
-                menu.add_command(label="Quitar", command=self.quitar_selecionado)
-                menu.add_command(label="Restaurar", command=self.restaurar_despesa)
+                menu.add_separator()
+                menu.add_command(label="◎ Pendente", command=lambda: self._mudar_status_despesa("Pendente"))
+                menu.add_command(label="✓ Pago", command=lambda: self._mudar_status_despesa("Pago"))
+                menu.add_command(label="⚠ Atrasado", command=lambda: self._mudar_status_despesa("Atrasado"))
+                menu.add_command(label="✗ Cancelado", command=lambda: self._mudar_status_despesa("Cancelado"))
                 menu.add_separator()
                 menu.add_command(label="Sair", command=lambda: None)
                 
             elif self.modo_atual == "vendas":
                 menu.add_command(label="Editar Venda", command=self.editar_venda)
                 menu.add_command(label="Visualizar Venda", command=self.visualizar_venda)
+                menu.add_separator()
+                menu.add_command(label="✓ Finalizada", command=lambda: self._mudar_status_venda("Finalizada"))
+                menu.add_command(label="⏳ Pendente", command=lambda: self._mudar_status_venda("Pendente"))
+                menu.add_command(label="✗ Cancelada", command=lambda: self._mudar_status_venda("Cancelada"))
                 menu.add_separator()
                 menu.add_command(label="Sair", command=lambda: None)
                 
@@ -457,6 +470,96 @@ class SistemaAleSapatilhas:
         if messagebox.askyesno("Confirmar", f"Restaurar produto para '{novo_status}'?", parent=self.root):
             database.atualizar_produto(id_banco, status_item=novo_status)
             self.exibir_produtos()
+
+    def _mudar_status_cliente(self, novo_status):
+        """Altera o status de um cliente"""
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+        
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status_cliente FROM clientes WHERE id=?", (id_banco,))
+            status_atual = cursor.fetchone()[0]
+        
+        if status_atual == novo_status:
+            messagebox.showinfo("Info", f"Cliente já está com status '{novo_status}'.", parent=self.root)
+            return
+        
+        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
+            database.atualizar_cliente(id_banco, status_cliente=novo_status)
+            self.exibir_clientes()
+
+    def _mudar_status_produto(self, novo_status):
+        """Altera o status de um produto"""
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+        
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status_item FROM produtos WHERE id=?", (id_banco,))
+            status_atual = cursor.fetchone()[0]
+        
+        if status_atual == novo_status:
+            messagebox.showinfo("Info", f"Produto já está com status '{novo_status}'.", parent=self.root)
+            return
+        
+        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
+            database.atualizar_produto(id_banco, status_item=novo_status)
+            self.exibir_produtos()
+
+    def _mudar_status_despesa(self, novo_status):
+        """Altera o status de uma despesa"""
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+        
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status FROM financeiro WHERE id=?", (id_banco,))
+            result = cursor.fetchone()
+            if not result:
+                messagebox.showerror("Erro", "Despesa não encontrada.", parent=self.root)
+                return
+            status_atual = result[0]
+        
+        if status_atual == novo_status:
+            messagebox.showinfo("Info", f"Despesa já está com status '{novo_status}'.", parent=self.root)
+            return
+        
+        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
+            with database.conectar() as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE financeiro SET status = ? WHERE id = ?", (novo_status, id_banco))
+                conn.commit()
+            self.exibir_financeiro()
+
+    def _mudar_status_venda(self, novo_status):
+        """Altera o status de uma venda"""
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+        
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status FROM vendas WHERE id=?", (id_banco,))
+            result = cursor.fetchone()
+            if not result:
+                messagebox.showerror("Erro", "Venda não encontrada.", parent=self.root)
+                return
+            status_atual = result[0]
+        
+        if status_atual == novo_status:
+            messagebox.showinfo("Info", f"Venda já está com status '{novo_status}'.", parent=self.root)
+            return
+        
+        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
+            with database.conectar() as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE vendas SET status = ? WHERE id = ?", (novo_status, id_banco))
+                conn.commit()
+            self.exibir_vendas()
 
     def atualizar_lista(self):
         if self.modo_atual == "clientes":

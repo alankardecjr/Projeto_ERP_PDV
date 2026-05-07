@@ -163,11 +163,17 @@ class JanelaCadastroDespesas(tk.Toplevel):
 
         # Sub-menu Parcelas
         self.frame_parcelas = tk.Frame(main_frame, bg="#E2E8F0", pady=5, padx=10)
-        tk.Label(self.frame_parcelas, text="PARCELAS:", bg="#E2E8F0", font=("Segoe UI", 9, "bold")).pack(side="left")
+        tk.Label(self.frame_parcelas, text="QUANTIDADE:", bg="#E2E8F0", font=("Segoe UI", 9, "bold")).pack(side="left")
         self.ent_qtd_parc = tk.Entry(self.frame_parcelas, width=5)
         self.ent_qtd_parc.pack(side="left", padx=5)
         self.ent_qtd_parc.insert(0, "1")
         self.ent_qtd_parc.bind("<KeyRelease>", lambda e: self.atualizar_calculo_parcela())
+        
+        tk.Label(self.frame_parcelas, text="DIA DO VENC.:", bg="#E2E8F0", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(20,0))
+        self.ent_dia_venc = tk.Entry(self.frame_parcelas, width=3)
+        self.ent_dia_venc.pack(side="left", padx=5)
+        self.ent_dia_venc.insert(0, "01")
+        
         self.lbl_calculo = tk.Label(self.frame_parcelas, text="= 1x R$ 0.00", bg="#E2E8F0", font=("Segoe UI", 9, "italic"), fg=self.cor_destaque)
         self.lbl_calculo.pack(side="left", padx=10)
 
