@@ -653,6 +653,22 @@ class JanelaCadastroProdutos(tk.Toplevel):
             except Exception as e:
                 messagebox.showerror("Erro", f"Erro ao indisponibilizar item: {str(e)}", parent=self)
 
+    def disponibilizar_produto_menu(self):
+        """Disponibilizar produto via menu de contexto"""
+        selecao = self.tree_busca.selection()
+        if not selecao: return
+        id_prod = self.tree_busca.item(selecao)["values"][0]
+        
+        if messagebox.askyesno("Confirmar", "Deseja disponbilizar este item?", parent=self):
+            try:
+                database.atualizar_produto(id_prod, status_item="Disponível")
+                messagebox.showinfo("Sucesso", "Item disponbilizado!", parent=self)
+                self.atualizar_tree_busca()
+                if hasattr(self.master, "exibir_produtos"):
+                    self.master.exibir_produtos()
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao disponbilizar item: {str(e)}", parent=self)
+
     def promocional_produto_menu(self):
         """Marcar produto como promocional via menu de contexto"""
         selecao = self.tree_busca.selection()
@@ -668,6 +684,22 @@ class JanelaCadastroProdutos(tk.Toplevel):
                     self.master.exibir_produtos()
             except Exception as e:
                 messagebox.showerror("Erro", f"Erro ao marcar item como promocional: {str(e)}", parent=self)
+
+    def esgotado_produto_menu(self):
+        """Marcar produto como esgotado via menu de contexto"""
+        selecao = self.tree_busca.selection()
+        if not selecao: return
+        id_prod = self.tree_busca.item(selecao)["values"][0]
+        
+        if messagebox.askyesno("Confirmar", "Deseja marcar este item como esgotado?", parent=self):
+            try:
+                database.atualizar_produto(id_prod, status_item="Esgotado")
+                messagebox.showinfo("Sucesso", "Item marcado como esgotado!", parent=self)
+                self.atualizar_tree_busca()
+                if hasattr(self.master, "exibir_produtos"):
+                    self.master.exibir_produtos()
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao marcar item como esgotado: {str(e)}", parent=self)
 
     def restaurar_produto_menu(self):
         """Restaurar produto via menu de contexto"""
