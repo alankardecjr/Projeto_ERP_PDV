@@ -116,13 +116,6 @@ class SistemaAleSapatilhas:
         self.tree = ttk.Treeview(self.tree_frame, show="headings", selectmode="browse")
         self.tree.pack(side="left", fill="both", expand=True)
 
-        # Barras de rolagem vertical e horizontal - REMOVIDAS conforme solicitação
-        # scrollbar_v = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
-        # scrollbar_v.pack(side="right", fill="y")
-        # scrollbar_h = ttk.Scrollbar(self.tree_frame, orient="horizontal", command=self.tree.xview)
-        # scrollbar_h.pack(side="bottom", fill="x")
-        # self.tree.configure(yscrollcommand=scrollbar_v.set, xscrollcommand=scrollbar_h.set)
-
         # --- Bindings de interação ---
         self.tree.bind("<Double-1>", lambda e: self.editar_selecionado())
         self.tree.bind("<Button-3>", self.mostrar_menu_contexto)
@@ -207,7 +200,9 @@ class SistemaAleSapatilhas:
             cursor = conn.cursor()
             cursor.execute("SELECT id, tipo, entidade_nome, descricao, valor, data_vencimento, data_pagamento, forma_pagamento, categoria, recorrencia, status FROM financeiro ORDER BY data_vencimento ASC")
             for f in cursor.fetchall():
-                self.tree.insert("", "end", iid=f[0], values=(f[1], f[2], f[3], f"R$ {f[4]:.2f}", self.formatar_data_exibicao(f[5]), self.formatar_data_exibicao(f[6]), f[7], f[8], f[9], f[10]))
+                # Aplicar tag "cancelado" se status for "Cancelado"
+                tag = ("cancelado",) if f[10] == "Cancelado" else ()
+                self.tree.insert("", "end", iid=f[0], values=(f[1], f[2], f[3], f"R$ {f[4]:.2f}", self.formatar_data_exibicao(f[5]), self.formatar_data_exibicao(f[6]), f[7], f[8], f[9], f[10]), tags=tag)
 
     def exibir_dashboard(self):
         res = database.dashboard_resumo()
@@ -343,6 +338,8 @@ class SistemaAleSapatilhas:
                 menu.add_command(label="⛔ Bloqueado", command=lambda: self._mudar_status_cliente("Bloqueado"))
                 menu.add_command(label="✗ Inativo", command=lambda: self._mudar_status_cliente("Inativo"))
                 menu.add_separator()
+                menu.add_command(label="🔄 Restaurar Status", command=self.restaurar_cliente)
+                menu.add_separator()
                 menu.add_command(label="Sair", command=lambda: None)
                 
             elif self.modo_atual == "produtos":
@@ -353,6 +350,8 @@ class SistemaAleSapatilhas:
                 menu.add_command(label="✗ Indisponível", command=lambda: self._mudar_status_produto("Indisponível"))
                 menu.add_command(label="⊘ Esgotado", command=lambda: self._mudar_status_produto("Esgotado"))
                 menu.add_command(label="⭐ Promocional", command=lambda: self._mudar_status_produto("Promocional"))
+                menu.add_separator()
+                menu.add_command(label="🔄 Restaurar Status", command=self.restaurar_produto)
                 menu.add_separator()
                 menu.add_command(label="Sair", command=lambda: None)
                 
@@ -375,6 +374,8 @@ class SistemaAleSapatilhas:
                 menu.add_command(label="⚠ Atrasado", command=lambda: self._mudar_status_despesa("Atrasado"))
                 menu.add_command(label="✗ Cancelado", command=lambda: self._mudar_status_despesa("Cancelado"))
                 menu.add_separator()
+                menu.add_command(label="🔄 Restaurar Status", command=self.restaurar_despesa)
+                menu.add_separator()
                 menu.add_command(label="Sair", command=lambda: None)
                 
             elif self.modo_atual == "vendas":
@@ -384,6 +385,8 @@ class SistemaAleSapatilhas:
                 menu.add_command(label="✓ Finalizada", command=lambda: self._mudar_status_venda("Finalizada"))
                 menu.add_command(label="⏳ Pendente", command=lambda: self._mudar_status_venda("Pendente"))
                 menu.add_command(label="✗ Cancelada", command=lambda: self._mudar_status_venda("Cancelada"))
+                menu.add_separator()
+                menu.add_command(label="🔄 Restaurar Status", command=self.restaurar_venda)
                 menu.add_separator()
                 menu.add_command(label="Sair", command=lambda: None)
                 
@@ -570,28 +573,40 @@ Status: {dados[12]}
             self.exibir_produtos()
 
     def _mudar_status_despesa(self, novo_status):
-        """Altera o status de uma despesa"""
+        """Altera o status de uma despesa/receita com gerenciamento de data_pagamento"""
         item = self.tree.selection()
         if not item: return
         id_banco = item[0]
         
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT status FROM financeiro WHERE id=?", (id_banco,))
+            cursor.execute("SELECT status, data_pagamento FROM financeiro WHERE id=?", (id_banco,))
             result = cursor.fetchone()
             if not result:
-                messagebox.showerror("Erro", "Despesa não encontrada.", parent=self.root)
+                messagebox.showerror("Erro", "Registro não encontrado.", parent=self.root)
                 return
-            status_atual = result[0]
+            status_atual, data_pagamento_atual = result
         
         if status_atual == novo_status:
-            messagebox.showinfo("Info", f"Despesa já está com status '{novo_status}'.", parent=self.root)
+            messagebox.showinfo("Info", f"Registro já está com status '{novo_status}'.", parent=self.root)
             return
+        
+        # Determinar valor de data_pagamento baseado no novo status
+        data_pagamento = None
+        if novo_status == "Pago":
+            data_pagamento = datetime.now().strftime("%Y-%m-%d")
+        elif novo_status in ["Pendente", "Atrasado"]:
+            data_pagamento = None  # Limpar data de pagamento
+        elif novo_status == "Cancelado":
+            data_pagamento = None  # Limpar data de pagamento
         
         if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
             with database.conectar() as conn:
                 cursor = conn.cursor()
-                cursor.execute("UPDATE financeiro SET status = ? WHERE id = ?", (novo_status, id_banco))
+                if data_pagamento:
+                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = ? WHERE id = ?", (novo_status, data_pagamento, id_banco))
+                else:
+                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = NULL WHERE id = ?", (novo_status, id_banco))
                 conn.commit()
             self.exibir_financeiro()
 
@@ -705,26 +720,73 @@ Recorrência: {recorrencia or 'Não Recorrente'}
         if not item: return
         id_banco = item[0]
         
+        # Buscar status atual e data de pagamento
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status, data_pagamento FROM financeiro WHERE id=?", (id_banco,))
+            result = cursor.fetchone()
+            if not result:
+                messagebox.showerror("Erro", "Registro não encontrado.", parent=self.root)
+                return
+            status_atual, data_pagamento_atual = result
+        
+        # Definir status anterior e data anterior
+        novo_status = None
+        nova_data_pagamento = None
+        
+        if status_atual == "Pago":
+            novo_status = "Pendente"
+            nova_data_pagamento = None  # Remover data de pagamento
+        elif status_atual == "Cancelado":
+            novo_status = "Pendente"
+            nova_data_pagamento = None
+        elif status_atual == "Atrasado":
+            novo_status = "Pendente"
+            nova_data_pagamento = None
+        else:
+            messagebox.showinfo("Info", "Registro já está pendente.", parent=self.root)
+            return
+        
+        if messagebox.askyesno("Confirmar", f"Restaurar registro para '{novo_status}'?", parent=self.root):
+            with database.conectar() as conn:
+                cursor = conn.cursor()
+                if nova_data_pagamento:
+                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = ? WHERE id = ?", (novo_status, nova_data_pagamento, id_banco))
+                else:
+                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = NULL WHERE id = ?", (novo_status, id_banco))
+                conn.commit()
+            self.exibir_financeiro()
+
+    def restaurar_venda(self):
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+        
         # Buscar status atual
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT status FROM financeiro WHERE id=?", (id_banco,))
-            status_atual = cursor.fetchone()[0]
+            cursor.execute("SELECT status FROM vendas WHERE id=?", (id_banco,))
+            result = cursor.fetchone()
+            if not result:
+                messagebox.showerror("Erro", "Venda não encontrada.", parent=self.root)
+                return
+            status_atual = result[0]
         
         # Definir status anterior
-        if status_atual == "Pago":
-            novo_status = "Pendente"
-        elif status_atual == "Cancelado":
-            novo_status = "Pendente"
-        elif status_atual == "Atrasado":
-            novo_status = "Pendente"
+        if status_atual == "Cancelada":
+            novo_status = "Finalizada"
+        elif status_atual == "Pendente":
+            novo_status = "Finalizada"
         else:
-            messagebox.showinfo("Info", "Despesa já está pendente.", parent=self.root)
+            messagebox.showinfo("Info", "Venda já está finalizada.", parent=self.root)
             return
         
-        if messagebox.askyesno("Confirmar", f"Restaurar despesa para '{novo_status}'?", parent=self.root):
-            database.atualizar_financeiro(id_banco, status=novo_status)
-            self.exibir_financeiro()
+        if messagebox.askyesno("Confirmar", f"Restaurar venda para '{novo_status}'?", parent=self.root):
+            with database.conectar() as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE vendas SET status = ? WHERE id = ?", (novo_status, id_banco))
+                conn.commit()
+            self.exibir_vendas()
 
     def editar_venda(self):
         item = self.tree.selection()
