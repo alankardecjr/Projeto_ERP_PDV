@@ -361,7 +361,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
                                     1
                                 )
                             
-                            messagebox.showinfo("Sucesso", "Preço/status atualizados e quantidade somada ao estoque.", parent=self)
+                            messagebox.showinfo("Sucesso", "Atualização realizada com sucesso.", parent=self)
                     else:
                         # Atributos diferentes - gerar novo SKU
                         novo_sku = self._gerar_sku_variacao(d["sku"])
@@ -383,7 +383,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
                             1
                         )
                         
-                        messagebox.showinfo("Sucesso", "Nova variação cadastrada com SKU diferente.", parent=self)
+                        messagebox.showinfo("Sucesso", "Nova variação cadastrada com sucesso.", parent=self)
                 else:
                     # Descrição diferente - sempre novo SKU
                     novo_sku = self._gerar_sku_novo(d["produto"], d["cor"])
@@ -405,7 +405,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
                         1
                     )
                     
-                    messagebox.showinfo("Sucesso", "Novo produto cadastrado.", parent=self)
+                    messagebox.showinfo("Sucesso", "Novo produto cadastrado com sucesso.", parent=self)
             else:
                 # Novo produto
                 criado = database.cadastrar_produto(
@@ -426,7 +426,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
                     1
                 )
                 
-                messagebox.showinfo("Sucesso", "Produto cadastrado!", parent=self)
+                messagebox.showinfo("Sucesso", "Produto cadastrado com sucesso.", parent=self)
 
             if hasattr(self.master, "exibir_produtos"):
                 self.master.exibir_produtos()

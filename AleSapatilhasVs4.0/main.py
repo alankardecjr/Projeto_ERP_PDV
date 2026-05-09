@@ -32,6 +32,14 @@ class SistemaAleSapatilhas:
         self.setup_ui()
         self.exibir_clientes() # Inicia visualizando clientes
 
+    def formatar_data_exibicao(self, data_str):
+        if data_str:
+            try:
+                return datetime.strptime(data_str, "%Y-%m-%d").strftime("%d/%m/%Y")
+            except ValueError:
+                return data_str
+        return ""
+
     def setup_ui(self):
         # Sidebar
         self.sidebar = tk.Frame(self.root, bg=self.cor_btn_sair, width=220)
@@ -173,7 +181,7 @@ class SistemaAleSapatilhas:
         self.preparar_colunas(("nome", "cpf", "telefone", "aniversario", "calcado", "limite", "status"))    
         for c in database.exibir_clientes():
             # c[1]=nome, c[2]=cpf, c[3]=telefone, c[5]=aniversario, c[6]=calcado, c[12]=limite, c[14]=status
-            self.tree.insert("", "end", iid=c[0], values=(c[1], c[2], c[3], c[5], c[6], f"R$ {c[12]:.2f}", c[14]))
+            self.tree.insert("", "end", iid=c[0], values=(c[1], c[2], c[3], self.formatar_data_exibicao(c[5]), c[6], f"R$ {c[12]:.2f}", c[14]))
 
     def exibir_produtos(self):
         self.modo_atual = "produtos"
@@ -189,17 +197,17 @@ class SistemaAleSapatilhas:
         self.lbl_titulo.config(text="📑 HISTÓRICO DE VENDAS")
         self.preparar_colunas(("cliente", "total", "forma", "data", "status"))
         for v in database.relatorio_vendas_geral():
-            self.tree.insert("", "end", iid=v[0], values=(v[1], f"R$ {v[2]:.2f}", v[3], v[5], v[7]))
+            self.tree.insert("", "end", iid=v[0], values=(v[1], f"R$ {v[2]:.2f}", v[3], self.formatar_data_exibicao(v[5]), v[7]))
 
     def exibir_financeiro(self):
         self.modo_atual = "financeiro"
         self.lbl_titulo.config(text="💸 FLUXO DE CAIXA")
-        self.preparar_colunas(("tipo", "Fornecedor", "descrição", "parcelas", "valor", "vencimento", "pagamento", "forma", "categoria", "recorrencia", "status"))
+        self.preparar_colunas(("tipo", "Fornecedor", "descrição", "valor", "vencimento", "pagamento", "forma", "categoria", "recorrencia", "status"))
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, tipo, entidade_nome, descricao, total_parcelas, valor, data_vencimento, data_pagamento, forma_pagamento, categoria, recorrencia, status FROM financeiro ORDER BY data_vencimento DESC")
+            cursor.execute("SELECT id, tipo, entidade_nome, descricao, valor, data_vencimento, data_pagamento, forma_pagamento, categoria, recorrencia, status FROM financeiro ORDER BY data_vencimento ASC")
             for f in cursor.fetchall():
-                self.tree.insert("", "end", iid=f[0], values=(f[1], f[2], f[3], f[4], f"R$ {f[5]:.2f}", f[6], f[7], f[8], f[9], f[10], f[11]))
+                self.tree.insert("", "end", iid=f[0], values=(f[1], f[2], f[3], f"R$ {f[4]:.2f}", self.formatar_data_exibicao(f[5]), self.formatar_data_exibicao(f[6]), f[7], f[8], f[9], f[10]))
 
     def exibir_dashboard(self):
         res = database.dashboard_resumo()

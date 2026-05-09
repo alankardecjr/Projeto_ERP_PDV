@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import database 
 import ui_utils
+from datetime import datetime
 
 class JanelaCadastroClientes(tk.Toplevel):
     def __init__(self, master, dados_cliente=None):
@@ -38,6 +39,11 @@ class JanelaCadastroClientes(tk.Toplevel):
         if dados_cliente:
             self.preencher_dados(dados_cliente)
         self.grab_set()
+
+    def formatar_data_para_bd(self, data_str):
+        try:
+            return datetime.strptime(data_str, "%d/%m/%Y").strftime("%Y-%m-%d")
+        except: return None
 
     def _aplicar_estilo_foco(self, ent):
         def on_enter(e):
@@ -130,7 +136,7 @@ class JanelaCadastroClientes(tk.Toplevel):
             "cpf": self.ent_cpf.get().strip(),
             "tel": self.ent_tel.get().strip(),
             "email": self.ent_email.get().strip(),
-            "niver": self.ent_niver.get().strip(),
+            "niver": self.formatar_data_para_bd(self.ent_niver.get().strip()) if self.ent_niver.get().strip() else None,
             "tam": self.ent_tam.get().strip() or 0,
             "endereco": self.ent_logra.get().strip(),
             "bairro": self.ent_bairro.get().strip(),
@@ -205,10 +211,18 @@ class JanelaCadastroClientes(tk.Toplevel):
         except Exception as e:
             messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}", parent=self)
 
+    def formatar_data_exibicao(self, data_str):
+        if data_str:
+            try:
+                return datetime.strptime(data_str, "%Y-%m-%d").strftime("%d/%m/%Y")
+            except ValueError:
+                return data_str
+        return ""
+
     def preencher_dados(self, d):
         mapping = [
             (self.ent_nome, d[1]), (self.ent_cpf, d[2]), (self.ent_tel, d[3]),
-            (self.ent_email, d[4]), (self.ent_niver, d[5]), (self.ent_tam, d[6]),
+            (self.ent_email, d[4]), (self.ent_niver, self.formatar_data_exibicao(d[5])), (self.ent_tam, d[6]),
             (self.ent_logra, d[7]), (self.ent_bairro, d[8]), (self.ent_cidade, d[9]),
             (self.ent_cep, d[10]), (self.ent_obs, d[11])
         ]
