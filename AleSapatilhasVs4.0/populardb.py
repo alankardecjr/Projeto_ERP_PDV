@@ -1,10 +1,21 @@
 import database
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 
 def popular_banco():
     print("=== Iniciando Povoamento do Banco de Dados Ale Sapatilhas Vs4.0 ===")
     database.criar_tabelas()
+
+    # --- Limpa dados antigos para gerar um conjunto de teste controlado ---
+    with database.conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM pagamentos")
+        cursor.execute("DELETE FROM financeiro")
+        cursor.execute("DELETE FROM itens_venda")
+        cursor.execute("DELETE FROM vendas")
+        cursor.execute("DELETE FROM produtos")
+        cursor.execute("DELETE FROM clientes")
+        conn.commit()
 
     # --- CLIENTES TESTE ---
     clientes_fake = [
@@ -16,8 +27,6 @@ def popular_banco():
         ("Renata Costa", "67890123456", "11988887776", "renata.costa@email.com", "1993-01-30", 35, "Rua XV, 20", "Centro", "Curitiba", "80020-000", "Trabalha no centro", 150.0),
         ("Natália Ferreira", "78901234567", "11988887777", "natalia.ferreira@email.com", "1989-11-12", 36, "Rua das Laranjeiras, 44", "Batel", "Curitiba", "80420-000", "Compra presentes para amigas", 250.0),
         ("Bianca Santos", "89012345678", "11988887778", "bianca.santos@email.com", "1991-09-02", 37, "Av. Paulista, 1000", "Bela Vista", "São Paulo", "01310-000", "Adora sapatos exclusivos", 350.0),
-        ("Daniela Rocha", "90123456789", "11988887779", "daniela.rocha@email.com", "1987-06-18", 39, "Rua Augusta, 150", "Consolação", "São Paulo", "01305-000", "Gosta de atendimento personalizado", 180.0),
-        ("Flávia Almeida", "01234567890", "11988887780", "flavia.almeida@email.com", "1994-02-22", 38, "Rua 7 de Abril, 123", "Centro", "Campinas", "13010-000", "Prefere pagamentos à vista", 220.0),
     ]
 
     for cliente in clientes_fake:
@@ -31,67 +40,62 @@ def popular_banco():
         ("SCP-001", "Scarpin Salto Baixo", "Nude", 38, 60.0, 150.00, 10, "Festa", "Verniz", "Fábrica B", "images/produto05.jpg"),
         ("RAS-001", "Rasteira Pedraria", "Dourada", 35, 35.0, 75.00, 16, "Verão", "Sintético", "Fábrica D", "images/produto08.jpg"),
         ("TEN-001", "Tênis Casual", "Branco", 38, 55.0, 129.90, 11, "Esportivo", "Couro Sintético", "Fábrica F", "images/produto10.jpg"),
+        ("SNE-001", "Tênis Esportivo", "Cinza", 39, 48.0, 139.90, 14, "Esportivo", "Malha", "Fábrica G", "images/produto11.jpg"),
+        ("MOC-001", "Mocassim Luxo", "Marrom", 37, 42.0, 129.00, 8, "Casual", "Couro", "Fábrica C", "images/produto12.jpg"),
+        ("BNK-001", "Bota Cano Curto", "Preto", 38, 70.0, 179.90, 9, "Inverno", "Couro", "Fábrica E", "images/produto13.jpg"),
+        ("ESP-001", "Espadrille Rafia", "Natural", 36, 38.0, 99.90, 7, "Verão", "Rafia", "Fábrica H", "images/produto14.jpg"),
     ]
 
     for produto in produtos_fake:
         database.cadastrar_produto(*produto)
 
-    # --- DESPESAS FIXAS ---
+    # --- DESPESAS ---
     hoje = datetime.now().strftime("%Y-%m-%d")
     despesas_fixas = [
-        ("Imobiliária Aliança", "Aluguel", "Infraestrutura", 3200.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
-        ("Neoenergia", "Energia Elétrica", "Infraestrutura", 520.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
-        ("Embasa", "Água", "Infraestrutura", 180.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
-        ("Vivo", "Internet/Telefone", "Infraestrutura", 190.00, "Fixa Mensal", hoje, "Dinheiro", "Pendente", 1),
+        ("Imobiliária Aliança", "Aluguel", "Infraestrutura", 3200.00, "Fixa Mensal", hoje, "PIX", "Pendente", 1, hoje, None, "Valor Fixo", 0.0, "Valor Fixo", 0.0, 3200.0),
+        ("Neoenergia", "Energia Elétrica", "Infraestrutura", 520.00, "Fixa Mensal", hoje, "Débito", "Pendente", 1, hoje, None, "Valor Fixo", 0.0, "Valor Fixo", 0.0, 520.0),
+        ("Embasa", "Água", "Infraestrutura", 180.00, "Fixa Mensal", hoje, "Boleto", "Pendente", 1, hoje, None, "Valor Fixo", 0.0, "Valor Fixo", 0.0, 180.0),
+        ("Vivo", "Internet/Telefone", "Infraestrutura", 190.00, "Fixa Mensal", hoje, "Cartão", "Pendente", 1, hoje, None, "Valor Fixo", 0.0, "Valor Fixo", 0.0, 190.0),
+        ("TotalPass", "Serviços de Mobilidade", "Infraestrutura", 120.00, "Parcelar", hoje, "PIX", "Pendente", 3, hoje, None, "Porcentagem", 5.0, "Valor Fixo", 0.0, 120.0),
     ]
 
     for despesa in despesas_fixas:
         database.cadastrar_despesa(*despesa)
 
-    # --- 8 VENDAS DE TESTE ---
+    # --- 5 VENDAS DE TESTE ---
     formas_pag = ["Cartão", "Dinheiro", "Pix"]
-    
-    # Coletar IDs para garantir integridade
+
     with database.conectar() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM clientes")
         clientes_ids = [row[0] for row in cursor.fetchall()]
-        
         cursor.execute("SELECT id, precovenda, quantidade FROM produtos WHERE quantidade > 0")
-        produtos_pool = [
-            {"id": row[0], "preco": row[1], "qtd": row[2]} for row in cursor.fetchall()
-        ]
+        produtos_pool = [{"id": row[0], "preco": row[1], "qtd": row[2]} for row in cursor.fetchall()]
 
     if clientes_ids and produtos_pool:
-        print("-> Registrando vendas de teste...")
-        for i in range(8):
-            cliente_id = random.choice(clientes_ids)
+        print("-> Registrando 5 vendas de teste...")
+        clientes_selecionados = random.sample(clientes_ids, min(5, len(clientes_ids)))
+        for cliente_id in clientes_selecionados:
             forma = random.choice(formas_pag)
             parcelas = 1 if forma != "Cartão" else random.randint(1, 3)
-            
-            # Seleciona 1 a 2 produtos aleatórios para a venda
-            qtd_produtos_venda = random.randint(1, 2)
-            itens_venda = []
-            
-            # Tenta pegar produtos com estoque
-            amostra_produtos = random.sample(produtos_pool, min(qtd_produtos_venda, len(produtos_pool)))
-            for p in amostra_produtos:
-                itens_venda.append({"id": p["id"], "qtd": 1, "preco": p["preco"]})
-
+            qtd_produtos_venda = random.randint(1, 3)
+            produtos_disponiveis = [p for p in produtos_pool if p["qtd"] > 0]
+            if not produtos_disponiveis:
+                break
+            selecao = random.sample(produtos_disponiveis, min(qtd_produtos_venda, len(produtos_disponiveis)))
+            itens_venda = [{"id": p["id"], "qtd": 1, "preco": p["preco"]} for p in selecao]
             desconto = random.choice([0.0, 5.0, 10.0])
-            
             sucesso, msg = database.realizar_venda_segura(cliente_id, itens_venda, forma, parcelas, desconto)
             if not sucesso:
-                print(f"Erro na venda {i+1}: {msg}")
+                print(f"Erro na venda do cliente {cliente_id}: {msg}")
 
     # --- QUITAR ALGUMAS DESPESAS ---
-    # Simula a quitação de títulos no financeiro para dar movimento ao fluxo de caixa
     with database.conectar() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM financeiro WHERE tipo = 'Despesa' LIMIT 2")
-        fornecedores_id = [row[0] for row in cursor.fetchall()]
-        for f_id in fornecedores_id:
-            database.quitar_titulo_financeiro(f_id, "Pix")
+        despesas_id = [row[0] for row in cursor.fetchall()]
+        for desp_id in despesas_id:
+            database.quitar_titulo_financeiro(desp_id, "Pix")
 
     print("\n✅ Banco de Dados Vs4.0 populado e sincronizado com sucesso!")
 

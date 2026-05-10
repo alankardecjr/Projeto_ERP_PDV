@@ -10,6 +10,36 @@ def conectar():
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
+def atualizar_schema():
+    # --- Garante que a tabela financeiro tenha as colunas necessárias e atualiza registros antigos ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(financeiro)")
+        colunas_financeiro = [row[1] for row in cursor.fetchall()]
+
+        colunas_para_adicionar = [
+            ("recorrencia", "TEXT DEFAULT 'Não Recorrente'"),
+            ("data_lancamento", "DATE DEFAULT CURRENT_DATE"),
+            ("tipo_encargos", "TEXT DEFAULT 'Valor Fixo'"),
+            ("valor_encargos", "REAL DEFAULT 0.0"),
+            ("tipo_descontos", "TEXT DEFAULT 'Valor Fixo'"),
+            ("valor_descontos", "REAL DEFAULT 0.0"),
+            ("valor_base", "REAL DEFAULT 0.0")
+        ]
+
+        for coluna, tipo in colunas_para_adicionar:
+            if coluna not in colunas_financeiro:
+                cursor.execute(f"ALTER TABLE financeiro ADD COLUMN {coluna} {tipo}")
+                colunas_financeiro.append(coluna)
+
+        if "valor_base" in colunas_financeiro:
+            cursor.execute("UPDATE financeiro SET valor_base = valor WHERE valor_base = 0 AND valor > 0")
+        if "data_lancamento" in colunas_financeiro:
+            cursor.execute("UPDATE financeiro SET data_lancamento = date('now') WHERE data_lancamento IS NULL")
+
+        conn.commit()
+
+
 def criar_tabelas():
     # --- Executa a criação de todas as tabelas necessárias, define restrições de dados (check) e configura gatilhos automáticos para controle de estoque ---
     with conectar() as conn:
@@ -134,12 +164,9 @@ def criar_tabelas():
         if "foto" not in colunas_produtos:
             cursor.execute("ALTER TABLE produtos ADD COLUMN foto TEXT DEFAULT ''")
 
-        cursor.execute("PRAGMA table_info(financeiro)")
-        colunas_financeiro = [row[1] for row in cursor.fetchall()]
-        if "recorrencia" not in colunas_financeiro:
-            cursor.execute("ALTER TABLE financeiro ADD COLUMN recorrencia TEXT DEFAULT 'Não Recorrente'")
-        
         conn.commit()
+
+    atualizar_schema()
 
 # --- Funções de produtos ---
 def cadastrar_produto(sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto=""):
@@ -341,7 +368,9 @@ def adicionar_meses(data_obj, meses):
     dia = min(data_obj.day, ultimo_dia_mes)
     return datetime(ano, mes, dia)
 
-def cadastrar_despesa(fornecedor, descricao, categoria, valor, recorrencia, vencimento, forma_pagamento, status, parcelas=1):
+def cadastrar_despesa(fornecedor, descricao, categoria, valor, recorrencia, vencimento, forma_pagamento, status, parcelas=1,
+                       data_lancamento=None, data_pagamento=None, tipo_encargos='Valor Fixo', valor_encargos=0.0,
+                       tipo_descontos='Valor Fixo', valor_descontos=0.0, valor_base=None):
     # --- Insere uma nova despesa no financeiro com recorrência e/ou parcelamento mensal ---
     def normalizar_data(data_str):
         for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
@@ -352,16 +381,45 @@ def cadastrar_despesa(fornecedor, descricao, categoria, valor, recorrencia, venc
         raise ValueError(f"Formato de data inválido: {data_str}")
 
     data_inicial = normalizar_data(vencimento)
+    if valor_base is None:
+        valor_base = valor
+
+    if tipo_encargos == 'Porcentagem':
+        encargos_total = round(valor_base * (valor_encargos / 100), 2)
+    else:
+        encargos_total = round(valor_encargos, 2)
+
+    if tipo_descontos == 'Porcentagem':
+        descontos_total = round(valor_base * (valor_descontos / 100), 2)
+    else:
+        descontos_total = round(valor_descontos, 2)
+
+    valor_final = round(valor_base + encargos_total - descontos_total, 2)
+    if recorrencia == 'Parcelar':
+        valor_parc = round(valor_final / parcelas, 2)
+    else:
+        valor_parc = valor_final
+
+    if data_lancamento is None:
+        data_lancamento = datetime.now().strftime('%Y-%m-%d')
+    else:
+        data_lancamento = normalizar_data(data_lancamento).strftime('%Y-%m-%d')
+
+    if data_pagamento:
+        data_pagamento = normalizar_data(data_pagamento).strftime('%Y-%m-%d')
+
     with conectar() as conn:
         cursor = conn.cursor()
-        valor_parc = round(valor / parcelas, 2)
         for i in range(parcelas):
             data_venc = adicionar_meses(data_inicial, i).strftime("%Y-%m-%d")
             cursor.execute("""
-                INSERT INTO financeiro (tipo, entidade_nome, descricao, valor, parcela_atual, total_parcelas,
-                                       data_vencimento, forma_pagamento, categoria, status, recorrencia)
-                VALUES ('Despesa', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (fornecedor, descricao, valor_parc, i+1, parcelas, data_venc, forma_pagamento, categoria, status, recorrencia))
+                INSERT INTO financeiro (tipo, entidade_nome, descricao, valor, valor_base, parcela_atual, total_parcelas,
+                                       data_vencimento, data_pagamento, forma_pagamento, categoria, status, recorrencia,
+                                       data_lancamento, tipo_encargos, valor_encargos, tipo_descontos, valor_descontos)
+                VALUES ('Despesa', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (fornecedor, descricao, valor_parc, valor_base, i+1, parcelas, data_venc, data_pagamento,
+                   forma_pagamento, categoria, status, recorrencia, data_lancamento, tipo_encargos,
+                   valor_encargos, tipo_descontos, valor_descontos))
         conn.commit()
         return True, "Despesa cadastrada com sucesso!"
 
