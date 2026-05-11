@@ -246,7 +246,7 @@ class SistemaAleSapatilhas:
     def editar_selecionado(self):
         item_id = self.tree.selection()
         if not item_id: return
-        id_banco = item_id[0]  # iid é o id do banco
+        id_banco = item_id[0]
 
         if self.modo_atual == "clientes":
             from cadastro_clientes import JanelaCadastroClientes
@@ -269,15 +269,14 @@ class SistemaAleSapatilhas:
                     self.exibir_produtos()
 
         elif self.modo_atual == "financeiro":
-            self.editar_financeiro_registro()
+            self.editar_financeiro_registro() 
 
         elif self.modo_atual == "vendas":
-            self.editar_venda()
+            self.editar_venda() 
 
     def editar_financeiro_registro(self):
         item = self.tree.selection()
-        if not item:
-            return
+        if not item: return
         registro_id = item[0]
 
         from cadastro_despesas import JanelaCadastroDespesas
@@ -287,40 +286,38 @@ class SistemaAleSapatilhas:
             cursor = conn.cursor()
             cursor.execute("SELECT tipo, venda_id FROM financeiro WHERE id = ?", (registro_id,))
             result = cursor.fetchone()
-            if not result:
-                messagebox.showerror("Erro", "Registro financeiro não encontrado.", parent=self.root)
-                return
+            
+            if not result: return
 
             tipo, venda_id = result
+            
             if tipo == "Despesa":
+                from cadastro_despesas import JanelaCadastroDespesas
                 cursor.execute("SELECT * FROM financeiro WHERE id = ?", (registro_id,))
                 dados = cursor.fetchone()
                 if dados:
                     JanelaCadastroDespesas(self.root, dados_despesa=dados)
                     self.exibir_financeiro()
+            
             elif tipo == "Receita":
-                if not venda_id:
-                    messagebox.showerror("Erro", "Registro financeiro sem venda vinculada.", parent=self.root)
-                    return
-                cursor.execute("""
-                    SELECT v.id, c.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
-                    FROM vendas v
-                    JOIN clientes c ON v.cliente_id = c.id
-                    WHERE v.id = ?
-                """, (venda_id,))
-                dados = cursor.fetchone()
-                if dados:
-                    dados_venda = {
-                        'id': dados[0],
-                        'cliente': f"{dados[2]} - {dados[3]}",
-                        'total': dados[4],
-                        'forma': dados[5],
-                        'parcelas': dados[6],
-                        'desconto': dados[7],
-                        'data': dados[8]
-                    }
-                    JanelaCadastroVendas(self.root, cliente_selecionado=(dados[1], dados[2], dados[3]), dados_venda=dados_venda)
-                    self.exibir_vendas()
+                from cadastro_vendas import JanelaCadastroVendas
+                if venda_id:
+                    # Se for receita vinda de venda, abrimos a edição da venda
+                    cursor.execute("""
+                        SELECT v.id, c.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
+                        FROM vendas v
+                        JOIN clientes c ON v.cliente_id = c.id
+                        WHERE v.id = ?
+                    """, (venda_id,))
+                    dados = cursor.fetchone()
+                    if dados:
+                        dados_venda = {
+                            'id': dados[0], 'cliente': f"{dados[2]} - {dados[3]}",
+                            'total': dados[4], 'forma': dados[5], 'parcelas': dados[6],
+                            'desconto': dados[7], 'data': dados[8]
+                        }
+                        JanelaCadastroVendas(self.root, cliente_selecionado=(dados[1], dados[2], dados[3]), dados_venda=dados_venda)
+                        self.exibir_vendas()
 
     # --- Função para mostrar menu de contexto ---
     def mostrar_menu_contexto(self, event):
@@ -791,15 +788,13 @@ Recorrência: {recorrencia or 'Não Recorrente'}
     def editar_venda(self):
         item = self.tree.selection()
         if not item: return
-        if not messagebox.askyesno("Confirmar", "Deseja editar esta venda?", parent=self.root):
-            return
         id_banco = item[0]
         
         from cadastro_vendas import JanelaCadastroVendas
         with database.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT v.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
+                SELECT v.id, c.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
                 FROM vendas v
                 JOIN clientes c ON v.cliente_id = c.id
                 WHERE v.id = ?
@@ -808,14 +803,15 @@ Recorrência: {recorrencia or 'Não Recorrente'}
             if dados:
                 dados_venda = {
                     'id': dados[0],
-                    'cliente': f"{dados[1]} - {dados[2]}",
-                    'total': dados[3],
-                    'forma': dados[4],
-                    'parcelas': dados[5],
-                    'desconto': dados[6],
-                    'data': dados[7]
+                    'cliente': f"{dados[2]} - {dados[3]}",
+                    'total': dados[4],
+                    'forma': dados[5],
+                    'parcelas': dados[6],
+                    'desconto': dados[7],
+                    'data': dados[8]
                 }
-                JanelaCadastroVendas(self.root, dados_venda=dados_venda)
+                # Correção: passando os dados corretamente para a JanelaCadastroVendas
+                JanelaCadastroVendas(self.root, cliente_selecionado=(dados[1], dados[2], dados[3]), dados_venda=dados_venda)
                 self.exibir_vendas()
 
     def visualizar_venda(self):
