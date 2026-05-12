@@ -1,51 +1,21 @@
 import sqlite3
 from datetime import datetime, timedelta
 
-# --- Nome do arquivo do banco de dados ---
+# --- Configuração do Banco de Dados ---
 DB_NAME = "AleSapatilhasVs4.0db"
 
 def conectar():
-    # --- Estabelece a conexão com o banco de dados sqlite3 e habilita o suporte a chaves estrangeiras para garantir a integridade referencial ---
+    """Estabelece a conexão com suporte a chaves estrangeiras[cite: 1]."""
     conn = sqlite3.connect(DB_NAME)
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
-def atualizar_schema():
-    # --- Garante que a tabela financeiro tenha as colunas necessárias e atualiza registros antigos ---
-    with conectar() as conn:
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(financeiro)")
-        colunas_financeiro = [row[1] for row in cursor.fetchall()]
-
-        colunas_para_adicionar = [
-            ("recorrencia", "TEXT DEFAULT 'Não Recorrente'"),
-            ("data_lancamento", "DATE DEFAULT CURRENT_DATE"),
-            ("tipo_encargos", "TEXT DEFAULT 'Valor Fixo'"),
-            ("valor_encargos", "REAL DEFAULT 0.0"),
-            ("tipo_descontos", "TEXT DEFAULT 'Valor Fixo'"),
-            ("valor_descontos", "REAL DEFAULT 0.0"),
-            ("valor_base", "REAL DEFAULT 0.0")
-        ]
-
-        for coluna, tipo in colunas_para_adicionar:
-            if coluna not in colunas_financeiro:
-                cursor.execute(f"ALTER TABLE financeiro ADD COLUMN {coluna} {tipo}")
-                colunas_financeiro.append(coluna)
-
-        if "valor_base" in colunas_financeiro:
-            cursor.execute("UPDATE financeiro SET valor_base = valor WHERE valor_base = 0 AND valor > 0")
-        if "data_lancamento" in colunas_financeiro:
-            cursor.execute("UPDATE financeiro SET data_lancamento = date('now') WHERE data_lancamento IS NULL")
-
-        conn.commit()
-
-
 def criar_tabelas():
-    # --- Executa a criação de todas as tabelas necessárias, define restrições de dados (check) e configura gatilhos automáticos para controle de estoque ---
+    """Cria a estrutura completa do ERP com foco em rastreabilidade financeira[cite: 1]."""
     with conectar() as conn:
         cursor = conn.cursor()
         
-        # --- Tabela de produtos: armazena informações técnicas, custos, preços de venda e o status atual do inventário ---
+        # --- PRODUTOS ---
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,13 +23,13 @@ def criar_tabelas():
             produto TEXT NOT NULL,
             cor TEXT NOT NULL,
             tamanho INTEGER NOT NULL,
-            precocusto REAL DEFAULT 0 NOT NULL,
+            precocusto REAL DEFAULT 0,
             precovenda REAL NOT NULL,
-            quantidade INTEGER DEFAULT 0 NOT NULL,
+            quantidade INTEGER DEFAULT 0,
             categoria TEXT,
             material TEXT,
             fornecedor TEXT,
-            status_item TEXT DEFAULT 'Disponível' CHECK(status_item IN ('Disponível', 'Indisponível', 'Esgotado', 'Promocional')),
+            status_item TEXT DEFAULT 'Disponível',
             foto TEXT DEFAULT '',
             ultima_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
@@ -84,7 +54,7 @@ def criar_tabelas():
             status_cliente TEXT DEFAULT 'Ativo' CHECK(status_cliente IN ('Vip', 'Ativo', 'Inativo', 'Bloqueado'))
         )""")
 
-        # --- Tabela de vendas: cabeçalho da transação que armazena totais, descontos, formas de pagamento e o vínculo com o cliente ---
+        # --- VENDAS ---
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS vendas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,7 +70,7 @@ def criar_tabelas():
             FOREIGN KEY (cliente_id) REFERENCES clientes (id)
         )""")
 
-        # --- Tabela de itens da venda: detalhamento de quais produtos compõem cada venda, registrando o preço praticado no momento da transação ---
+        # --- ITENS DA VENDA ---
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS itens_venda (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,27 +83,37 @@ def criar_tabelas():
             FOREIGN KEY (produto_id) REFERENCES produtos (id)
         )""")
 
-        # --- Tabela financeiro: centraliza contas a pagar e a receber, permitindo o controle de parcelamento e fluxo de caixa ---
+        # --- FINANCEIRO (Refatorado para Recorrência e Pagamentos Parciais) ---
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS financeiro (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tipo TEXT CHECK(tipo IN ('Receita', 'Despesa')),
             venda_id INTEGER,
+            id_agrupador INTEGER, 
             entidade_nome TEXT, 
             descricao TEXT NOT NULL,
-            valor REAL NOT NULL,
-            parcela_atual INTEGER DEFAULT 1,
-            total_parcelas INTEGER DEFAULT 1,
-            data_vencimento DATE NOT NULL,
-            data_pagamento DATE,
+            valor REAL NOT NULL,            -- Valor líquido esperado da parcela
+            valor_base REAL,                 -- Valor original sem encargos/descontos
+            valor_pago REAL DEFAULT 0,       -- Suporte a pagamento parcial[cite: 1]
+            encargos REAL DEFAULT 0,
+            descontos REAL DEFAULT 0,
             forma_pagamento TEXT,
+            recorrencia TEXT DEFAULT 'Não Recorrente',
+            total_parcelas INTEGER DEFAULT 1,
+            parcela_atual INTEGER DEFAULT 1,
+            data_vencimento DATE NOT NULL,   -- Data específica da parcela[cite: 1]
+            data_pagamento DATE,
             categoria TEXT,
             status TEXT DEFAULT 'Pendente' CHECK(status IN ('Pendente', 'Pago', 'Atrasado', 'Cancelado')),
-            recorrencia TEXT DEFAULT 'Não Recorrente',
+            data_lancamento DATE DEFAULT CURRENT_DATE,
+            tipo_encargos TEXT DEFAULT 'Valor Fixo',
+            valor_encargos REAL DEFAULT 0,
+            tipo_descontos TEXT DEFAULT 'Valor Fixo',
+            valor_descontos REAL DEFAULT 0,
             FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE
         )""")
 
-        # --- Tabela de pagamentos: registra pagamentos efetuados para vendas ou despesas ---
+        # --- PAGAMENTOS (Log de auditoria) ---
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS pagamentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,15 +122,14 @@ def criar_tabelas():
             valor_pago REAL NOT NULL,
             forma_pagamento TEXT NOT NULL,
             data_pagamento DATETIME DEFAULT CURRENT_TIMESTAMP,
-            parcela_referente INTEGER,
             observacao TEXT,
             FOREIGN KEY (venda_id) REFERENCES vendas (id),
             FOREIGN KEY (financeiro_id) REFERENCES financeiro (id)
         )""")
-        
-        # --- Gatilho de estoque: altera automaticamente o status do produto para 'esgotado' quando a quantidade atinge zero ou menos ---
+
+        # Trigger para Status de Estoque
         cursor.execute("""
-        CREATE TRIGGER IF NOT EXISTS trg_estoque_esgotado
+        CREATE TRIGGER IF NOT EXISTS trg_estoque_status
         AFTER UPDATE OF quantidade ON produtos
         BEGIN
             UPDATE produtos SET status_item = 'Esgotado' WHERE id = NEW.id AND quantidade <= 0;
@@ -164,9 +143,8 @@ def criar_tabelas():
         if "foto" not in colunas_produtos:
             cursor.execute("ALTER TABLE produtos ADD COLUMN foto TEXT DEFAULT ''")
 
-        conn.commit()
 
-    atualizar_schema()
+        conn.commit()
 
 # --- Funções de produtos ---
 def cadastrar_produto(sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto=""):
@@ -273,9 +251,19 @@ def listar_itens():
         cursor.execute("SELECT id, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item, foto FROM produtos WHERE status_item != 'Indisponível' ORDER BY produto ASC")
         return cursor.fetchall()
 
-# --- Movimentações e vendas ---
-def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, desconto=0):
-    # --- Processa uma venda completa: valida o estoque disponível, calcula totais, baixa o inventário e gera as parcelas no financeiro dentro de uma transação segura ---
+
+# --- MOTOR DE DATAS E RECORRÊNCIA ---
+
+def adicionar_meses(data_obj, meses):
+    """Calcula a data de vencimento exata para as parcelas recorrentes[cite: 1]."""
+    ano = data_obj.year + (data_obj.month + meses - 1) // 12
+    mes = (data_obj.month + meses - 1) % 12 + 1
+    # Garante que o dia não ultrapasse o último dia do mês
+    dia = min(data_obj.day, [31, 29 if ano % 4 == 0 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mes-1])
+    return datetime(ano, mes, dia)
+
+def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, desconto_total=0):
+    """Executa a venda e projeta as parcelas nas datas específicas de fluxo de caixa[cite: 1]."""
     with conectar() as conn:
         cursor = conn.cursor()
         try:
@@ -285,14 +273,13 @@ def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, de
                 res = cursor.fetchone()
                 if not res or res[0] < item['qtd']:
                     return False, f"Estoque insuficiente: {res[1] if res else 'Produto não encontrado'}"
-
-            # --- Cálculos financeiros: define o montante bruto e aplica o desconto para chegar ao valor líquido ---
+           
             total_bruto = sum(p['qtd'] * p['preco'] for p in lista_produtos)
-            total_liquido = round(total_bruto - desconto, 2)
+            total_liquido = round(total_bruto - desconto_total, 2)
             
-            # --- Registro do cabeçalho: insere os dados gerais da venda para gerar o id de referência ---
+            # Registro da Venda
             cursor.execute("""INSERT INTO vendas (cliente_id, valor_bruto, desconto, valor_total, forma_pagamento, qtd_parcelas)
-                              VALUES (?, ?, ?, ?, ?, ?)""", (cliente_id, total_bruto, desconto, total_liquido, forma_pgto, parcelas))
+                              VALUES (?, ?, ?, ?, ?, ?)""", (cliente_id, total_bruto, desconto_total, total_liquido, forma_pgto, parcelas))
             venda_id = cursor.lastrowid
 
             # --- Processamento de itens e estoque: registra cada produto vendido e subtrai a quantidade do inventário ---
@@ -301,21 +288,27 @@ def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, de
                 cursor.execute("INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal) VALUES (?, ?, ?, ?, ?)",
                                (venda_id, p['id'], p['qtd'], p['preco'], p['qtd'] * p['preco']))
 
-            # --- Geração de parcelas financeiras: cria registros de receita com vencimentos mensais baseados no número de parcelas ---
-            valor_parc = round(total_liquido / parcelas, 2)
+            # Lançamento das Parcelas Recorrentes
+            valor_parcela = round(total_liquido / parcelas, 2)
             for i in range(parcelas):
-                venc = adicionar_meses(datetime.now(), i).strftime("%Y-%m-%d")
+                if i == parcelas - 1: # Ajuste de centavos na última parcela
+                    valor_parcela = round(total_liquido - (valor_parcela * (parcelas - 1)), 2)
+                
+                vencimento = adicionar_meses(datetime.now(), i).strftime("%Y-%m-%d")
+                
                 cursor.execute("""
-                    INSERT INTO financeiro (tipo, venda_id, entidade_nome, descricao, valor, parcela_atual, total_parcelas, data_vencimento, categoria)
-                    VALUES ('Receita', ?, (SELECT nome FROM clientes WHERE id=?), ?, ?, ?, ?, ?, 'Venda de Produtos')
-                """, (venda_id, cliente_id, f"Venda #{venda_id}", valor_parc, i+1, parcelas, venc))
+                    INSERT INTO financeiro (
+                        tipo, venda_id, id_agrupador, entidade_nome, descricao, valor, valor_base, 
+                        parcela_atual, total_parcelas, data_vencimento, categoria, recorrencia
+                    ) VALUES ('Receita', ?, ?, (SELECT nome FROM clientes WHERE id=?), ?, ?, ?, ?, ?, ?, 'Venda', 'Parcelado')
+                """, (venda_id, venda_id, cliente_id, f"Venda #{venda_id} - Parcela {i+1}/{parcelas}", 
+                      valor_parcela, valor_parcela, i+1, parcelas, vencimento))
 
             conn.commit()
             return True, "Venda finalizada com sucesso!"
         except Exception as e:
             conn.rollback()
             return False, f"Erro ao processar venda: {str(e)}"
-
 # --- Financeiro e relatórios ---
 def quitar_titulo_financeiro(financeiro_id, forma_pgto):
     # --- Registra o pagamento de uma conta a pagar ou receber alterando seu status e salvando a data da liquidação ---
@@ -526,26 +519,31 @@ def relatorio_vendas_geral():
             ORDER BY v.data_venda DESC
         """)
         return cursor.fetchall()
-    
+
 def fluxo_caixa_mensal(mes, ano):
-    # --- Consolida os valores financeiros de um mês específico, separando o que já foi liquidado do que ainda está previsto ---
+    """Consolida as parcelas nas datas específicas para visualização no fluxo de caixa[cite: 1]."""
     with conectar() as conn:
         cursor = conn.cursor()
-        filtro = f"{ano}-{str(mes).zfill(2)}%"       
-
+        filtro = f"{ano}-{str(mes).zfill(2)}%"
+        
         cursor.execute("""
             SELECT 
-                COALESCE(SUM(CASE WHEN tipo='Receita' AND status='Pago' THEN valor ELSE 0 END), 0) as entradas,
-                COALESCE(SUM(CASE WHEN tipo='Despesa' AND status='Pago' THEN valor ELSE 0 END), 0) as saidas,
-                COALESCE(SUM(CASE WHEN tipo='Receita' AND status='Pendente' THEN valor ELSE 0 END), 0) as a_receber,
-                COALESCE(SUM(CASE WHEN tipo='Despesa' AND status='Pendente' THEN valor ELSE 0 END), 0) as a_pagar
+                COALESCE(SUM(CASE WHEN tipo='Receita' AND status='Pago' THEN valor_pago ELSE 0 END), 0) as entradas,
+                COALESCE(SUM(CASE WHEN tipo='Despesa' AND status='Pago' THEN valor_pago ELSE 0 END), 0) as saidas,
+                COALESCE(SUM(CASE WHEN tipo='Receita' AND status='Pendente' THEN (valor - valor_pago) ELSE 0 END), 0) as a_receber,
+                COALESCE(SUM(CASE WHEN tipo='Despesa' AND status='Pendente' THEN (valor - valor_pago) ELSE 0 END), 0) as a_pagar
             FROM financeiro 
             WHERE data_vencimento LIKE ? OR data_pagamento LIKE ?
         """, (filtro, filtro))
-        
         return cursor.fetchone()
 
-# --- Execução principal ---
+def listar_itens():
+    """Recupera produtos para o checkout[cite: 1]."""
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, produto, cor, tamanho, precocusto, precovenda, quantidade FROM produtos WHERE status_item != 'Indisponível'")
+        return cursor.fetchall()
+
 if __name__ == "__main__":
     criar_tabelas()
-    print("✓ Banco de Dados Ale Sapatilhas Vs4.0 Refatorado e Ativo.")
+    print("✓ Banco de Dados Ale Sapatilhas Vs4.0 - Completo e Ativo.")

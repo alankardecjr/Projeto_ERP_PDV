@@ -47,7 +47,8 @@ class SistemaAleSapatilhas:
 
         btn_estilo = {
             "font": ("Segoe UI", 10, "bold"), "bg": self.cor_btn_menu, "fg": "white",
-            "relief": "flat", "cursor": "hand2", "anchor": "w", "padx": 20, "pady": 10
+            "relief": "flat", "activebackground": self.cor_hover_btn, 
+            "activeforeground": "white", "cursor": "hand2", "anchor": "w", "padx": 20
         }
 
         botoes = [
@@ -69,8 +70,7 @@ class SistemaAleSapatilhas:
             if texto == "":
                 tk.Label(self.sidebar, bg=self.cor_btn_sair, pady=10).pack()
                 continue
-            btn = tk.Button(self.sidebar, text=texto,
-                            command=lambda c=comando, m=modo: self.executar_comando_menu(c, m), **btn_estilo)
+            btn = tk.Button(self.sidebar, text=texto, command=lambda c=comando, m=modo: self.executar_comando_menu(c, m), **btn_estilo)
             btn.pack(fill="x", pady=2)
             if modo:
                 self.botoes_menu.setdefault(modo, []).append(btn)
