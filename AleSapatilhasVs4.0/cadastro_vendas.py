@@ -43,6 +43,14 @@ class JanelaCadastroVendas(tk.Toplevel):
         
         self.listar_estoque_completo()
 
+    def formatar_data_exibicao(self, data_str):
+        if data_str:
+            try:
+                return datetime.strptime(data_str, "%Y-%m-%d").strftime("%d/%m/%Y")
+            except ValueError:
+                return data_str
+        return 
+
     def configurar_estilos(self):
         self.style = ttk.Style()
         self.style.theme_use("clam")
@@ -62,11 +70,11 @@ class JanelaCadastroVendas(tk.Toplevel):
 
     def setup_layout(self):
         # --- Sidebar ---
-        self.sidebar = tk.Frame(self, bg=self.cor_btn_sair, width=200)
+        self.sidebar = tk.Frame(self, bg=self.cor_btn_sair, width=220)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
         
-        tk.Label(self.sidebar, text="ALÊ\nSAPATILHAS", font=("Segoe UI", 16, "bold"), 
+        tk.Label(self.sidebar, text="ALÊ\nSAPATILHAS", font=("Segoe UI", 18, "bold"), 
                  bg=self.cor_btn_sair, fg="white", pady=20).pack()
     
         btn_estilo = {
@@ -80,6 +88,7 @@ class JanelaCadastroVendas(tk.Toplevel):
             ("", None, None), 
             ("👤 NOVO CLIENTE", self.abrir_novo_cliente, "clientes"),
             ("📦 NOVO PRODUTO", self.abrir_cadastro_produto, "produtos"),
+            ("💸 NOVA DESPESAS", self.abrir_cadastro_despesas, "financeiro"), 
             ("🔄 ATUALIZAR", self.listar_estoque_completo, None),
             ("", None, None),
             ("🚪SAIR", self.destroy, None)
@@ -87,7 +96,7 @@ class JanelaCadastroVendas(tk.Toplevel):
 
         for texto, comando, modo in botoes:
             if texto == "":
-                tk.Label(self.sidebar, bg=self.cor_btn_sair, pady=5).pack()
+                tk.Label(self.sidebar, bg=self.cor_btn_sair, pady=10).pack()
                 continue
 
             btn = tk.Button(self.sidebar, text=texto, 
