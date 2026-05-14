@@ -19,7 +19,8 @@ def criar_tabelas():
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sku TEXT UNIQUE, 
+            sku TEXT UNIQUE,
+            tipo TEXT CHECK(tipo IN ('Calçados', 'Confecções')) DEFAULT 'Calçados',
             produto TEXT NOT NULL,
             cor TEXT NOT NULL,
             tamanho INTEGER NOT NULL,
@@ -38,6 +39,7 @@ def criar_tabelas():
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT CHECK(tipo IN ('Cliente', 'Fornecedor')) DEFAULT 'Cliente',
             nome TEXT NOT NULL,
             cpf TEXT UNIQUE,
             telefone TEXT NOT NULL,
@@ -52,6 +54,19 @@ def criar_tabelas():
             limite_credito REAL DEFAULT 0,
             data_cadastro DATETIME DEFAULT CURRENT_TIMESTAMP,
             status_cliente TEXT DEFAULT 'Ativo' CHECK(status_cliente IN ('Vip', 'Ativo', 'Inativo', 'Bloqueado'))
+        )""")
+
+       # 3. INTERAÇÕES (Novo CRM)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cliente_interacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cliente_id INTEGER NOT NULL,
+            data_interacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+            tipo_contato TEXT CHECK(tipo_contato IN ('WhatsApp', 'Telefone', 'E-mail', 'Presencial')),
+            assunto TEXT, 
+            detalhes TEXT,
+            vendedor_responsavel TEXT,
+            FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE CASCADE
         )""")
 
         # --- VENDAS ---
@@ -89,6 +104,7 @@ def criar_tabelas():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tipo TEXT CHECK(tipo IN ('Receita', 'Despesa')),
             venda_id INTEGER,
+            cliente_id INTEGER,
             id_agrupador INTEGER, 
             entidade_nome TEXT, 
             descricao TEXT,
@@ -111,7 +127,8 @@ def criar_tabelas():
             tipo_descontos TEXT DEFAULT 'Valor Fixo',
             valor_descontos REAL DEFAULT 0,
             FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE
-        )""")
+            FOREIGN KEY (cliente_id) REFERENCES clientes (id)   
+                            )""")
 
         # --- PAGAMENTOS (Log de auditoria) ---
         cursor.execute("""
@@ -120,8 +137,11 @@ def criar_tabelas():
             venda_id INTEGER,
             financeiro_id INTEGER,
             valor_pago REAL NOT NULL,
+            juros_pagos REAL DEFAULT 0,
+            descontos_pagos REAL DEFAULT 0,
             forma_pagamento TEXT NOT NULL,
             data_pagamento DATETIME DEFAULT CURRENT_TIMESTAMP,
+            conta_bancaria TEXT,
             observacao TEXT,
             FOREIGN KEY (venda_id) REFERENCES vendas (id),
             FOREIGN KEY (financeiro_id) REFERENCES financeiro (id)
@@ -147,7 +167,7 @@ def criar_tabelas():
         conn.commit()
 
 # --- Funções de produtos ---
-def cadastrar_produto(sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto=""):
+def cadastrar_produto(sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto=""):
     # --- Insere um novo produto no catálogo. Se o SKU já existir com os mesmos dados, soma a quantidade. Se o SKU existir com atributos diferentes, gera um SKU novo e salva.
     try:
         with conectar() as conn:
@@ -174,9 +194,9 @@ def cadastrar_produto(sku, produto, cor, tamanho, precocusto, precovenda, quanti
                 sku = novo_sku
 
             cursor.execute("""
-                INSERT INTO produtos (sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto))
+                INSERT INTO produtos (sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto))
             conn.commit()
             return True
     except sqlite3.IntegrityError:
@@ -186,7 +206,7 @@ def exibir_produtos():
     # --- Recupera a lista completa de produtos cadastrados com seus principais detalhes técnicos e comerciais ---
     with conectar() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, sku, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item, foto FROM produtos ORDER BY produto ASC")
+        cursor.execute("SELECT id, sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item, foto FROM produtos ORDER BY produto ASC")
         return cursor.fetchall()
 
 def atualizar_produto(produto_id, **kwargs):
@@ -205,18 +225,18 @@ def cadastrar_cliente(nome, cpf, tel, email, niver, tam, endereco, bairro, cidad
         with conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO clientes (nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (nome, cpf, tel, email, niver, tam, endereco, bairro, cidade, cep, obs, limite))
+                INSERT INTO clientes (tipo, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ('Cliente', nome, cpf, tel, email, niver, tam, endereco, bairro, cidade, cep, obs, limite))
             return cursor.lastrowid
     except sqlite3.IntegrityError:
         return False
-
+        
 def exibir_clientes():
     # --- Lista todos os clientes cadastrados trazendo informações de contato, status e histórico de cadastro ---
     with conectar() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito, data_cadastro, status_cliente FROM clientes ORDER BY nome ASC")
+        cursor.execute("SELECT id, tipo, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito, data_cadastro, status_cliente FROM clientes ORDER BY nome ASC")
         return cursor.fetchall()
 
 def atualizar_cliente(cliente_id, **kwargs):
@@ -227,6 +247,11 @@ def atualizar_cliente(cliente_id, **kwargs):
         valores = list(kwargs.values()) + [cliente_id]
         cursor.execute(f"UPDATE clientes SET {campos} WHERE id = ?", valores)
         conn.commit()
+
+def registrar_interacao(cliente_id, tipo, assunto, detalhes, vendedor):
+    with conectar() as conn:
+        conn.execute("INSERT INTO cliente_interacoes (cliente_id, tipo_contato, assunto, detalhes, vendedor_responsavel) VALUES (?,?,?,?,?)",
+                     (cliente_id, tipo, assunto, detalhes, vendedor))
 
 # --- Funções de apoio para vendas e financeiro ---
 def atualizar_financeiro(financeiro_id, **kwargs):
@@ -252,15 +277,38 @@ def listar_itens():
         return cursor.fetchall()
 
 
-# --- MOTOR DE DATAS E RECORRÊNCIA ---
+# --- MOTORES DE CÁLCULO (AUXILIARES) ---
 
 def adicionar_meses(data_obj, meses):
-    """Calcula a data de vencimento exata para as parcelas recorrentes[cite: 1]."""
     ano = data_obj.year + (data_obj.month + meses - 1) // 12
     mes = (data_obj.month + meses - 1) % 12 + 1
-    # Garante que o dia não ultrapasse o último dia do mês
-    dia = min(data_obj.day, [31, 29 if ano % 4 == 0 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mes-1])
+    ultimo_dia = [31, 29 if ano % 4 == 0 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mes-1]
+    dia = min(data_obj.day, ultimo_dia)
     return datetime(ano, mes, dia)
+
+def calcular_valor_com_ajustes(valor_base, t_enc, v_enc, t_desc, v_desc):
+    enc = v_enc if t_enc == 'Valor Fixo' else round(valor_base * (v_enc / 100), 2)
+    des = v_desc if t_desc == 'Valor Fixo' else round(valor_base * (v_desc / 100), 2)
+    return round(valor_base + enc - des, 2), enc, des
+
+def realizar_venda_crediario(cliente_id, lista_produtos, parcelas, desc_venda=0):
+    """Lógica de venda que alimenta a tabela 'receitas' via crediário."""
+    with conectar() as conn:
+        cursor = conn.cursor()
+        total_bruto = sum(p['qtd'] * p['preco'] for p in lista_produtos)
+        total_liquido = total_bruto - desc_venda
+        
+        cursor.execute("INSERT INTO vendas (cliente_id, valor_bruto, desconto, valor_total, forma_pagamento, qtd_parcelas) VALUES (?,?,?,?,?,?)",
+                       (cliente_id, total_bruto, desc_venda, total_liquido, 'Crediário', parcelas))
+        venda_id = cursor.lastrowid
+
+        valor_parc = round(total_liquido / parcelas, 2)
+        for i in range(parcelas):
+            venc = adicionar_meses(datetime.now(), 'Mensal', i).strftime("%Y-%m-%d")
+            cursor.execute("""INSERT INTO receitas (venda_id, cliente_id, descricao, valor_base, valor_esperado, data_vencimento, parcela_atual, total_parcelas) 
+                              VALUES (?,?,?,?,?,?,?,?)""", 
+                           (venda_id, cliente_id, f"Parcela {i+1}/{parcelas} - Venda #{venda_id}", valor_parc, valor_parc, venc, i+1, parcelas))
+        conn.commit()
 
 def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, desconto_total=0):
     """Executa a venda e projeta as parcelas nas datas específicas de fluxo de caixa[cite: 1]."""
@@ -309,6 +357,7 @@ def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, de
         except Exception as e:
             conn.rollback()
             return False, f"Erro ao processar venda: {str(e)}"
+
 # --- Financeiro e relatórios ---
 def quitar_titulo_financeiro(financeiro_id, forma_pgto):
     # --- Registra o pagamento de uma conta a pagar ou receber alterando seu status e salvando a data da liquidação ---
@@ -350,16 +399,6 @@ def registrar_pagamento(venda_id, financeiro_id, valor_pago, forma_pagamento, ob
             VALUES (?, ?, ?, ?, ?)
         """, (venda_id, financeiro_id, valor_pago, forma_pagamento, observacao))
         return cursor.lastrowid
-
-def adicionar_meses(data_obj, meses):
-    # --- Ajusta vencimento mês a mês preservando o dia quando possível ---
-    ano = data_obj.year + (data_obj.month + meses - 1) // 12
-    mes = (data_obj.month + meses - 1) % 12 + 1
-    prox_ano = ano + (mes // 12)
-    prox_mes = mes % 12 + 1
-    ultimo_dia_mes = (datetime(prox_ano, prox_mes, 1) - timedelta(days=1)).day
-    dia = min(data_obj.day, ultimo_dia_mes)
-    return datetime(ano, mes, dia)
 
 def cadastrar_despesa(fornecedor, descricao, categoria, valor, recorrencia, vencimento, forma_pagamento, status, parcelas=1,
                        data_lancamento=None, data_pagamento=None, tipo_encargos='Valor Fixo', valor_encargos=0.0,
