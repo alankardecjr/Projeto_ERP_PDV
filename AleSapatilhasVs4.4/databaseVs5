@@ -1,0 +1,230 @@
+import sqlite3
+from datetime import datetime, timedelta
+
+# --- Configuração do Banco de Dados ---
+DB_NAME = "AleSapatilhas_Financeiro_Pro.db"
+
+def conectar():
+    conn = sqlite3.connect(DB_NAME)
+    conn.execute("PRAGMA foreign_keys = ON;")
+    return conn
+
+def criar_tabelas():
+    with conectar() as conn:
+        cursor = conn.cursor()
+        
+        # 1. PRODUTOS (Mantendo atributos originais)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS produtos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sku TEXT UNIQUE, 
+            produto TEXT NOT NULL,
+            cor TEXT NOT NULL,
+            tamanho INTEGER NOT NULL,
+            precocusto REAL DEFAULT 0,
+            precovenda REAL NOT NULL,
+            quantidade INTEGER DEFAULT 0,
+            categoria TEXT,
+            material TEXT,
+            fornecedor TEXT,
+            status_item TEXT DEFAULT 'Disponível',
+            foto TEXT DEFAULT '',
+            ultima_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
+        )""")
+
+        # 2. CLIENTES (Mantendo atributos originais)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS clientes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            cpf TEXT UNIQUE,
+            telefone TEXT NOT NULL,
+            email TEXT,
+            aniversario DATE,
+            tamanho_calcado INTEGER,
+            endereco_completo TEXT,
+            bairro TEXT,
+            cidade TEXT,
+            cep TEXT,
+            observacao TEXT,
+            limite_credito REAL DEFAULT 0,
+            data_cadastro DATETIME DEFAULT CURRENT_TIMESTAMP,
+            status_cliente TEXT DEFAULT 'Ativo' CHECK(status_cliente IN ('Vip', 'Ativo', 'Inativo', 'Bloqueado'))
+        )""")
+
+        # 3. INTERAÇÕES (Novo CRM)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cliente_interacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cliente_id INTEGER NOT NULL,
+            data_interacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+            tipo_contato TEXT CHECK(tipo_contato IN ('WhatsApp', 'Telefone', 'E-mail', 'Presencial')),
+            assunto TEXT, 
+            detalhes TEXT,
+            vendedor_responsavel TEXT,
+            FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE CASCADE
+        )""")
+
+        # 4. VENDAS
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS vendas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cliente_id INTEGER NOT NULL,
+            valor_bruto REAL NOT NULL,
+            desconto REAL DEFAULT 0,
+            valor_total REAL NOT NULL,
+            forma_pagamento TEXT NOT NULL, 
+            qtd_parcelas INTEGER DEFAULT 1,
+            data_venda DATETIME DEFAULT CURRENT_TIMESTAMP,
+            status_venda TEXT DEFAULT 'Finalizada' CHECK(status_venda IN ('Finalizada', 'Cancelada', 'Pendente')),
+            vendedor TEXT,
+            FOREIGN KEY (cliente_id) REFERENCES clientes (id)
+        )""")
+
+        # 5. ITENS DA VENDA
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS itens_venda (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            venda_id INTEGER NOT NULL,
+            produto_id INTEGER NOT NULL,
+            quantidade INTEGER NOT NULL,
+            preco_unitario REAL NOT NULL,
+            subtotal REAL NOT NULL,
+            FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE,
+            FOREIGN KEY (produto_id) REFERENCES produtos (id)
+        )""")
+
+        # 6. RECEITAS (Contas a Receber / Crediário)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS receitas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            venda_id INTEGER,
+            cliente_id INTEGER,
+            descricao TEXT,
+            valor_base REAL NOT NULL,
+            tipo_encargos TEXT DEFAULT 'Valor Fixo',
+            valor_encargos REAL DEFAULT 0,
+            tipo_descontos TEXT DEFAULT 'Valor Fixo',
+            valor_descontos REAL DEFAULT 0,
+            valor_esperado REAL, -- valor_base + encargos - descontos
+            data_vencimento DATE NOT NULL,
+            status TEXT DEFAULT 'Pendente' CHECK(status IN ('Pendente', 'Pago', 'Parcial', 'Atrasado', 'Cancelado')),
+            parcela_atual INTEGER DEFAULT 1,
+            total_parcelas INTEGER DEFAULT 1,
+            FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE,
+            FOREIGN KEY (cliente_id) REFERENCES clientes (id)
+        )""")
+
+        # 7. DESPESAS (Contas a Pagar / Custos Fixos)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS despesas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fornecedor TEXT,
+            descricao TEXT NOT NULL,
+            categoria TEXT,
+            valor_base REAL NOT NULL,
+            tipo_encargos TEXT DEFAULT 'Valor Fixo',
+            valor_encargos REAL DEFAULT 0,
+            tipo_descontos TEXT DEFAULT 'Valor Fixo',
+            valor_descontos REAL DEFAULT 0,
+            valor_esperado REAL,
+            data_vencimento DATE NOT NULL,
+            recorrencia TEXT DEFAULT 'Única' CHECK(recorrencia IN ('Única', 'Mensal', 'Trimestral', 'Semestral', 'Anual')),
+            status TEXT DEFAULT 'Pendente' CHECK(status IN ('Pendente', 'Pago', 'Parcial', 'Atrasado', 'Cancelado')),
+            parcela_atual INTEGER DEFAULT 1,
+            total_parcelas INTEGER DEFAULT 1,
+            data_lancamento DATE DEFAULT CURRENT_DATE
+        )""")
+
+        # 8. PAGAMENTOS (Fluxo de Caixa Real)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pagamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            receita_id INTEGER,
+            despesa_id INTEGER,
+            valor_pago REAL NOT NULL,
+            juros_pagos REAL DEFAULT 0,
+            descontos_pagos REAL DEFAULT 0,
+            forma_pagamento TEXT NOT NULL,
+            data_pagamento DATETIME DEFAULT CURRENT_TIMESTAMP,
+            conta_bancaria TEXT,
+            observacao TEXT,
+            FOREIGN KEY (receita_id) REFERENCES receitas (id),
+            FOREIGN KEY (despesa_id) REFERENCES despesas (id)
+        )""")
+
+# --- MOTOR DE CÁLCULOS E DATAS ---
+
+def adicionar_periodo(data_obj, tipo_recorrencia, salto=1):
+    meses_map = {'Mensal': 1, 'Trimestral': 3, 'Semestral': 6, 'Anual': 12, 'Única': 0}
+    meses = meses_map.get(tipo_recorrencia, 1) * salto
+    
+    ano = data_obj.year + (data_obj.month + meses - 1) // 12
+    mes = (data_obj.month + meses - 1) % 12 + 1
+    dia = min(data_obj.day, [31, 29 if ano % 4 == 0 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mes-1])
+    return datetime(ano, mes, dia)
+
+def calcular_valor_final(valor_base, t_enc, v_enc, t_desc, v_desc):
+    enc = v_enc if t_enc == 'Valor Fixo' else round(valor_base * (v_enc / 100), 2)
+    des = v_desc if t_desc == 'Valor Fixo' else round(valor_base * (v_desc / 100), 2)
+    return round(valor_base + enc - des, 2), enc, des
+
+# --- FUNÇÕES REFATORADAS ---
+
+def realizar_venda_crediario(cliente_id, lista_produtos, parcelas, desc_venda=0):
+    """Lógica de venda que alimenta a tabela 'receitas' via crediário."""
+    with conectar() as conn:
+        cursor = conn.cursor()
+        total_bruto = sum(p['qtd'] * p['preco'] for p in lista_produtos)
+        total_liquido = total_bruto - desc_venda
+        
+        cursor.execute("INSERT INTO vendas (cliente_id, valor_bruto, desconto, valor_total, forma_pagamento, qtd_parcelas) VALUES (?,?,?,?,?,?)",
+                       (cliente_id, total_bruto, desc_venda, total_liquido, 'Crediário', parcelas))
+        venda_id = cursor.lastrowid
+
+        valor_parc = round(total_liquido / parcelas, 2)
+        for i in range(parcelas):
+            venc = adicionar_periodo(datetime.now(), 'Mensal', i).strftime("%Y-%m-%d")
+            cursor.execute("""INSERT INTO receitas (venda_id, cliente_id, descricao, valor_base, valor_esperado, data_vencimento, parcela_atual, total_parcelas) 
+                              VALUES (?,?,?,?,?,?,?,?)""", 
+                           (venda_id, cliente_id, f"Parcela {i+1}/{parcelas} - Venda #{venda_id}", valor_parc, valor_parc, venc, i+1, parcelas))
+        conn.commit()
+
+def cadastrar_despesa_fixa(fornecedor, descricao, categoria, valor, recorrencia, parcelas, vencimento_inicial):
+    """Lógica para despesas que podem ser mensais, trimestrais, etc."""
+    data_venc = datetime.strptime(vencimento_inicial, "%Y-%m-%d")
+    with conectar() as conn:
+        cursor = conn.cursor()
+        for i in range(parcelas):
+            venc_atual = adicionar_periodo(data_venc, recorrencia, i).strftime("%Y-%m-%d")
+            cursor.execute("""INSERT INTO despesas (fornecedor, descricao, categoria, valor_base, valor_esperado, data_vencimento, recorrencia, parcela_atual, total_parcelas)
+                              VALUES (?,?,?,?,?,?,?,?,?)""",
+                           (fornecedor, descricao, categoria, valor, valor, venc_atual, recorrencia, i+1, parcelas))
+        conn.commit()
+
+def registrar_baixa_pagamento(tipo, id_referencia, valor_pago, forma, conta, t_enc='Valor Fixo', v_enc=0, t_desc='Valor Fixo', v_desc=0):
+    """Função mestre para quitar tanto receitas quanto despesas com cálculo de encargos no ato."""
+    val_final, juros, desc = calcular_valor_final(valor_pago, t_enc, v_enc, t_desc, v_desc)
+    
+    with conectar() as conn:
+        cursor = conn.cursor()
+        if tipo == 'Receita':
+            cursor.execute("INSERT INTO pagamentos (receita_id, valor_pago, juros_pagos, descontos_pagos, forma_pagamento, conta_bancaria) VALUES (?,?,?,?,?,?)",
+                           (id_referencia, val_final, juros, desc, forma, conta))
+            cursor.execute("UPDATE receitas SET status = 'Pago' WHERE id = ?", (id_referencia,))
+        else:
+            cursor.execute("INSERT INTO pagamentos (despesa_id, valor_pago, juros_pagos, descontos_pagos, forma_pagamento, conta_bancaria) VALUES (?,?,?,?,?,?)",
+                           (id_referencia, val_final, juros, desc, forma, conta))
+            cursor.execute("UPDATE despesas SET status = 'Pago' WHERE id = ?", (id_referencia,))
+        conn.commit()
+
+def registrar_interacao(cliente_id, tipo, assunto, detalhes, vendedor):
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO cliente_interacoes (cliente_id, tipo_contato, assunto, detalhes, vendedor_responsavel) VALUES (?,?,?,?,?)",
+                       (cliente_id, tipo, assunto, detalhes, vendedor))
+        conn.commit()
+
+if __name__ == "__main__":
+    criar_tabelas()
+    print("✓ ERP Ale Sapatilhas Refatorado: Finanças, CRM e PDV integrados.")
