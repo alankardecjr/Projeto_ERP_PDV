@@ -40,10 +40,19 @@ class SistemaAleSapatilhas:
                 return data_str
         return ""
     
+    def _aplicar_estilo_foco(self, ent):
+        def on_enter(e):
+            if self.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
+        def on_leave(e):
+            if self.focus_get() != ent: ent.config(highlightbackground=self.cor_borda)
+        def on_focus_in(e): ent.config(highlightbackground=self.cor_destaque, highlightthickness=2)
+        def on_focus_out(e): ent.config(highlightbackground=self.cor_borda, highlightthickness=1)
+        ent.bind("<Enter>", on_enter); ent.bind("<Leave>", on_leave)
+        ent.bind("<FocusIn>", on_focus_in); ent.bind("<FocusOut>", on_focus_out)
+
     def aplicar_hover(self, btn):
         btn.bind("<Enter>", lambda e: btn.config(bg=self.cor_hover_btn))
         btn.bind("<Leave>", lambda e: btn.config(bg=self.cor_btn_menu))
-
 
     def setup_ui(self):
         # Sidebar
@@ -61,16 +70,21 @@ class SistemaAleSapatilhas:
         }
 
         botoes = [
+            ("", None, None), 
+            ("", None, None), 
+            ("", None, None), 
             ("➕ LANÇAR VENDA", self.abrir_cadastro_vendas, "vendas"),
             ("📑 LISTAR VENDAS", self.exibir_vendas, "vendas"),
             ("💸 LANÇAR DESPESAS", self.abrir_cadastro_despesas, "financeiro"), 
             ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
-            ("👤 CADASTRAR CLIENTE", self.abrir_cadastro_cliente, "clientes"),
-            ("👥 LISTAR CLIENTES", self.exibir_clientes, "clientes"),
+            ("👤 CADASTRAR CONTATO", self.abrir_cadastro_cliente, "clientes"),
+            ("👥 LISTAR CONTATOS", self.exibir_clientes, "clientes"),
             ("📦 CADASTRAR PRODUTO", self.abrir_cadastro_produto, "produtos"),
             ("👠 LISTAR PRODUTOS", self.exibir_produtos, "produtos"),
             ("📊 DASHBOARD", self.exibir_dashboard, "dashboard"),
             ("🔄 ATUALIZAR", self.atualizar_lista, None),
+            ("", None, None), 
+            ("", None, None), 
             ("", None, None), 
             ("🚪 SAIR", self.confirmar_saida, None)
         ]
@@ -174,24 +188,24 @@ class SistemaAleSapatilhas:
     # --- Funções de carregamento ---
     def exibir_clientes(self):
         self.modo_atual = "clientes"
-        self.lbl_titulo.config(text="👥 CADASTRO DE CLIENTES")
-        self.preparar_colunas(("nome", "cpf", "telefone", "aniversario", "calcado", "limite", "status"))    
+        self.lbl_titulo.config(text="👥 AGENDA DE CONTATOS")
+        self.preparar_colunas(( "nome", "cpf/cnpj", "telefone", "aniversario", "calcado", "limite", "status"))    
         for c in database.exibir_clientes():
-            # c[1]=nome, c[2]=cpf, c[3]=telefone, c[5]=aniversario, c[6]=calcado, c[12]=limite, c[14]=status
-            self.tree.insert("", "end", iid=c[0], values=(c[1], c[2], c[3], self.formatar_data_exibicao(c[5]), c[6], f"R$ {c[12]:.2f}", c[14]))
+            # c[2]=nome, c[3]=cpf, c[4]=telefone, c[6]=aniversario, c[7]=calcado, c[13]=limite, c[15]=status
+            self.tree.insert("", "end", iid=c[0], values=(c[2], c[3], c[4], self.formatar_data_exibicao(c[6]), c[7], f"R$ {c[13]:.2f}", c[15]))
 
     def exibir_produtos(self):
         self.modo_atual = "produtos"
-        self.lbl_titulo.config(text="👠 ESTOQUE DE PRODUTOS")
+        self.lbl_titulo.config(text="👠 CONTROLE DE ESTOQUE")
         # Ajustado para bater com a ordem do database.exibir_produtos()
-        self.preparar_colunas(("sku", "produto", "cor", "tamanho", "estoque", "preço", "fornecedor", "status"))
+        self.preparar_colunas(("sku", "produto", "material" "cor", "tamanho", "estoque", "preço", "fornecedor", "status"))
         for i in database.exibir_produtos():
-            # i[1]=sku, i[2]=produto, i[3]=cor, i[4]=tamanho, i[7]=quantidade, i[6]=precovenda, i[10]=fornecedor, i[11]=status_item
-            self.tree.insert("", "end", iid=i[0], values=(i[1], i[2], i[3], i[4], i[7], f"R$ {i[6]:.2f}", i[10], i[11]))
+            # i[1]=sku, i[3]=produto, i[10]=material, i[4]=cor, i[5]=tamanho, i[8]=quantidade, i[7]=precovenda, i[11]=fornecedor, i[12]=status_item
+            self.tree.insert("", "end", iid=i[0], values=(i[1], i[3], i[10], i[4], i[5], i[8], f"R$ {i[7]:.2f}", i[11], i[12]))
 
     def exibir_vendas(self):
         self.modo_atual = "vendas"
-        self.lbl_titulo.config(text="📑 HISTÓRICO DE VENDAS")
+        self.lbl_titulo.config(text="📑 HISTORICO DE VENDAS")
         self.preparar_colunas(("cliente", "total", "forma", "data", "status"))
         for v in database.relatorio_vendas_geral():
             self.tree.insert("", "end", iid=v[0], values=(v[1], f"R$ {v[2]:.2f}", v[3], self.formatar_data_exibicao(v[5]), v[7]))
@@ -226,7 +240,7 @@ class SistemaAleSapatilhas:
         if self.modo_atual == "clientes" and selection:
             item_id = selection[0]
             valores = self.tree.item(item_id, "values")
-            cliente_selecionado = (item_id, valores[0], valores[2])  # (id, nome, telefone)
+            cliente_selecionado = (item_id, valores[0], valores[3])  # (id, nome, telefone)
         
         from cadastro_vendas import JanelaCadastroVendas
         JanelaCadastroVendas(self.root, cliente_selecionado)

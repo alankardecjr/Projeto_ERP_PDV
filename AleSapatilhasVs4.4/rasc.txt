@@ -1,2036 +1,704 @@
-import tkinter as tk
-from tkinter import messagebox, ttk
-import database 
-from datetime import datetime
-import ui_utils
+import sqlite3
+from datetime import datetime, timedelta
 
-class SistemaAleSapatilhas:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Alê Sapatilhas - Gestão Integrada")
+# --- Configuração do Banco de Dados ---
+DB_NAME = "AleSapatilhasVs4.4db"
+
+def conectar():
+    """Estabelece a conexão com suporte a chaves estrangeiras[cite: 1]."""
+    conn = sqlite3.connect(DB_NAME)
+    conn.execute("PRAGMA foreign_keys = ON;")
+    return conn
+
+def criar_tabelas():
+    """Cria a estrutura completa do ERP com foco em rastreabilidade financeira[cite: 1]."""
+    with conectar() as conn:
+        cursor = conn.cursor()
         
-        # --- Configuração de UI e Cores ---
-        ui_utils.calcular_dimensoes_janela(self.root, maximizar=True)
-        paleta = ui_utils.get_paleta()
-        self.bg_fundo = paleta["bg_fundo"]
-        self.bg_card = paleta["bg_card"]
-        self.cor_borda = paleta["cor_borda"]
-        self.cor_texto = paleta["cor_texto"]
-        self.cor_destaque = paleta["cor_destaque"]
-        self.cor_btn_menu = paleta["cor_btn_menu"]
-        self.cor_btn_sair = paleta["cor_btn_sair"]
-        self.cor_hover_btn = paleta["cor_hover_btn"]
+        # --- PRODUTOS ---
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS produtos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sku TEXT UNIQUE,
+            tipo TEXT CHECK(tipo IN ('Calçados', 'Confecções')) DEFAULT 'Calçados',
+            produto TEXT NOT NULL,
+            cor TEXT NOT NULL,
+            tamanho INTEGER NOT NULL,
+            precocusto REAL DEFAULT 0,
+            precovenda REAL NOT NULL,
+            quantidade INTEGER DEFAULT 0,
+            categoria TEXT,
+            material TEXT,
+            fornecedor TEXT,
+            status_item TEXT DEFAULT 'Disponível',
+            foto TEXT DEFAULT '',
+            ultima_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
+        )""")
 
-        self.root.configure(bg=self.bg_fundo)
-        self.modo_atual = "clientes" 
-        self.botoes_menu = {} 
-        
-        self.setup_ui()
-        self.exibir_clientes()
+        # --- Tabela de clientes: registra dados de contato, localização, preferências de tamanho e limites de crédito para vendas a prazo ---
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS clientes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT CHECK(tipo IN ('Cliente', 'Fornecedor')) DEFAULT 'Cliente',
+            nome TEXT NOT NULL,
+            cpf TEXT UNIQUE,
+            telefone TEXT NOT NULL,
+            email TEXT,
+            aniversario DATE,
+            tamanho_calcado INTEGER,
+            endereco_completo TEXT,
+            bairro TEXT,
+            cidade TEXT,
+            cep TEXT,
+            observacao TEXT,
+            limite_credito REAL DEFAULT 0,
+            data_cadastro DATETIME DEFAULT CURRENT_TIMESTAMP,
+            status_cliente TEXT DEFAULT 'Ativo' CHECK(status_cliente IN ('Vip', 'Ativo', 'Inativo', 'Bloqueado'))
+        )""")
 
-    def formatar_data_exibicao(self, data_str):
-        if data_str:
-            try:
-                return datetime.strptime(data_str, "%Y-%m-%d").strftime("%d/%m/%Y")
-            except ValueError:
-                return data_str
-        return ""
+       # 3. INTERAÇÕES (Novo CRM)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cliente_interacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cliente_id INTEGER NOT NULL,
+            data_interacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+            tipo_contato TEXT CHECK(tipo_contato IN ('WhatsApp', 'Telefone', 'E-mail', 'Presencial')),
+            assunto TEXT, 
+            detalhes TEXT,
+            vendedor_responsavel TEXT,
+            FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE CASCADE
+        )""")
 
-    def setup_ui(self):
-        # Sidebar
-        self.sidebar = tk.Frame(self.root, bg=self.cor_btn_sair, width=220)
-        self.sidebar.pack(side="left", fill="y")
-        self.sidebar.pack_propagate(False)
+        # --- VENDAS ---
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS vendas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cliente_id INTEGER NOT NULL,
+            valor_bruto REAL NOT NULL,
+            desconto REAL DEFAULT 0,
+            valor_total REAL NOT NULL,
+            forma_pagamento TEXT NOT NULL, 
+            qtd_parcelas INTEGER DEFAULT 1,
+            data_venda DATETIME DEFAULT CURRENT_TIMESTAMP,
+            status_venda TEXT DEFAULT 'Finalizada' CHECK(status_venda IN ('Finalizada', 'Cancelada', 'Pendente')),
+            vendedor TEXT,
+            FOREIGN KEY (cliente_id) REFERENCES clientes (id)
+        )""")
 
-        tk.Label(self.sidebar, text="ALÊ\nSAPATILHAS", font=("Segoe UI", 18, "bold"), 
-                 bg=self.cor_btn_sair, fg="white", pady=20).pack()
+        # --- ITENS DA VENDA ---
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS itens_venda (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            venda_id INTEGER NOT NULL,
+            produto_id INTEGER NOT NULL,
+            quantidade INTEGER NOT NULL,
+            preco_unitario REAL NOT NULL,
+            subtotal REAL NOT NULL,
+            FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE,
+            FOREIGN KEY (produto_id) REFERENCES produtos (id)
+        )""")
 
-        btn_estilo = {
-            "font": ("Segoe UI", 10, "bold"), "bg": self.cor_btn_menu, "fg": "white",
-            "relief": "flat", "activebackground": self.cor_hover_btn, 
-            "activeforeground": "white", "cursor": "hand2", "anchor": "w", "padx": 20
-        }
+        # --- FINANCEIRO (Refatorado para Recorrência e Pagamentos Parciais) ---
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS financeiro (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT CHECK(tipo IN ('Receita', 'Despesa')),
+            venda_id INTEGER,
+            cliente_id INTEGER,
+            id_agrupador INTEGER, 
+            entidade_nome TEXT, 
+            descricao TEXT,
+            valor REAL NOT NULL,            -- Valor líquido esperado da parcela
+            valor_base REAL,                 -- Valor original sem encargos/descontos
+            valor_pago REAL DEFAULT 0,       -- Suporte a pagamento parcial[cite: 1]
+            encargos REAL DEFAULT 0,
+            descontos REAL DEFAULT 0,
+            forma_pagamento TEXT,
+            recorrencia TEXT DEFAULT 'Não Recorrente',
+            total_parcelas INTEGER DEFAULT 1,
+            parcela_atual INTEGER DEFAULT 1,
+            data_vencimento DATE NOT NULL,   -- Data específica da parcela[cite: 1]
+            data_pagamento DATE,
+            categoria TEXT,
+            status TEXT DEFAULT 'Pendente' CHECK(status IN ('Pendente', 'Pago', 'Atrasado', 'Cancelado')),
+            data_lancamento DATE DEFAULT CURRENT_DATE,
+            tipo_encargos TEXT DEFAULT 'Valor Fixo',
+            valor_encargos REAL DEFAULT 0,
+            tipo_descontos TEXT DEFAULT 'Valor Fixo',
+            valor_descontos REAL DEFAULT 0,
+            FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE
+            FOREIGN KEY (cliente_id) REFERENCES clientes (id)   
+                            )""")
 
-        botoes = [
-            ("➕ LANÇAR VENDA", self.abrir_cadastro_vendas, "vendas"),
-            ("📑 LISTAR VENDAS", self.exibir_vendas, "vendas"),
-            ("💸 LANÇAR DESPESAS", self.abrir_cadastro_despesas, "financeiro"), 
-            ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
-            ("👤 CADASTRAR CLIENTE", self.abrir_cadastro_cliente, "clientes"),
-            ("👥 LISTAR CLIENTES", self.exibir_clientes, "clientes"),
-            ("📦 CADASTRAR PRODUTO", self.abrir_cadastro_produto, "produtos"),
-            ("👠 LISTAR PRODUTOS", self.exibir_produtos, "produtos"),
-            ("📊 DASHBOARD", self.exibir_dashboard, "dashboard"),
-            ("🔄 ATUALIZAR", self.atualizar_lista, None),
-            ("", None, None), 
-            ("🚪 SAIR", self.confirmar_saida, None)
-        ]
+        # --- PAGAMENTOS (Log de auditoria) ---
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pagamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            venda_id INTEGER,
+            financeiro_id INTEGER,
+            valor_pago REAL NOT NULL,
+            juros_pagos REAL DEFAULT 0,
+            descontos_pagos REAL DEFAULT 0,
+            forma_pagamento TEXT NOT NULL,
+            data_pagamento DATETIME DEFAULT CURRENT_TIMESTAMP,
+            conta_bancaria TEXT,
+            observacao TEXT,
+            FOREIGN KEY (venda_id) REFERENCES vendas (id),
+            FOREIGN KEY (financeiro_id) REFERENCES financeiro (id)
+        )""")
 
-        for texto, comando, modo in botoes:
-            if texto == "":
-                tk.Label(self.sidebar, bg=self.cor_btn_sair, pady=10).pack()
-                continue
-            btn = tk.Button(self.sidebar, text=texto, command=lambda c=comando, m=modo: self.executar_comando_menu(c, m), **btn_estilo)
-            btn.pack(fill="x", pady=2)
-            if modo:
-                self.botoes_menu.setdefault(modo, []).append(btn)
+        # Trigger para Status de Estoque
+        cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_estoque_status
+        AFTER UPDATE OF quantidade ON produtos
+        BEGIN
+            UPDATE produtos SET status_item = 'Esgotado' WHERE id = NEW.id AND quantidade <= 0;
+            UPDATE produtos SET status_item = 'Disponível' WHERE id = NEW.id AND quantidade > 0 AND status_item = 'Esgotado';
+        END;
+        """)
 
-        # Container Principal
-        self.container = tk.Frame(self.root, bg=self.bg_fundo, padx=20, pady=20)
-        self.container.pack(side="right", fill="both", expand=True)
+        # --- Atualiza tabela existente para suportar imagem de produto sem quebrar dados já criados ---
+        cursor.execute("PRAGMA table_info(produtos)")
+        colunas_produtos = [row[1] for row in cursor.fetchall()]
+        if "foto" not in colunas_produtos:
+            cursor.execute("ALTER TABLE produtos ADD COLUMN foto TEXT DEFAULT ''")
 
-        # Barra de busca
-        search_frame = tk.Frame(self.container, bg=self.bg_fundo)
-        search_frame.pack(fill="x", pady=(0, 10))
-        tk.Label(search_frame, text="🔍 BUSCA RÁPIDA", font=("Segoe UI", 10, "bold"), bg=self.bg_fundo).pack(side="left")
-        self.ent_busca = tk.Entry(search_frame, font=("Segoe UI", 10), bg=self.bg_card, relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_busca.pack(side="left", padx=10, fill="x", expand=True, ipady=4)
-        self.ent_busca.bind("<KeyRelease>", lambda e: self.filtrar_busca())
 
-        self.lbl_titulo = tk.Label(self.container, text="Lista", font=("Segoe UI", 18, "bold"), bg=self.bg_fundo, fg=self.cor_texto)
-        self.lbl_titulo.pack(anchor="w", pady=(0, 10))
+        conn.commit()
 
-        # Tabela
-        self.style = ttk.Style()
-        self.style.theme_use("clam")
-        self.style.configure("Treeview", background=self.bg_card, foreground=self.cor_texto, rowheight=35, font=("Segoe UI", 10))
-        self.style.map("Treeview", background=[('selected', self.cor_destaque)])
-        
-        self.tree_frame = tk.Frame(self.container, bg=self.bg_card)
-        self.tree_frame.pack(fill="both", expand=True)
-
-        self.tree = ttk.Treeview(self.tree_frame, show="headings", selectmode="browse")
-        self.tree.pack(side="left", fill="both", expand=True)
-
-        # Bindings
-        self.tree.bind("<Double-1>", lambda e: self.editar_selecionado())
-        self.tree.bind("<Button-3>", self.mostrar_menu_contexto)
-        self.tree.bind("<Motion>", self.focus_linha_mouse)
-        
-        self.atualizar_destaque_menu()
-
-    def executar_comando_menu(self, comando, modo):
-        if comando:
-            comando()
-        if modo:
-            self.modo_atual = modo
-            self.atualizar_destaque_menu()
-
-    def atualizar_destaque_menu(self):
-        for modo, botoes in self.botoes_menu.items():
-            for btn in botoes:
-                if modo == self.modo_atual:
-                    btn.config(bg=self.cor_destaque, fg="white")
-                else:
-                    btn.config(bg=self.cor_btn_menu, fg="white")
-
-    def focus_linha_mouse(self, event):
-        item = self.tree.identify_row(event.y)
-        if item:
-            self.tree.focus(item)
-            self.tree.selection_set(item)
-        
-    def preparar_colunas(self, colunas):
-        self.tree.delete(*self.tree.get_children())
-        self.tree["columns"] = colunas
-        for col in colunas:
-            self.tree.heading(col, text=col.upper())
-            self.tree.column(col, anchor="center", width=120)
-
-    # --- Métodos de Exibição ---
-    def exibir_clientes(self):
-        self.modo_atual = "clientes"
-        self.lbl_titulo.config(text="👥 CADASTRO DE CLIENTES")
-        self.preparar_colunas(("nome", "cpf", "telefone", "aniversario", "calcado", "limite", "status"))    
-        for c in database.exibir_clientes():
-            self.tree.insert("", "end", iid=c[0], values=(c[1], c[2], c[3], self.formatar_data_exibicao(c[5]), c[6], f"R$ {c[12]:.2f}", c[14]))
-
-    def exibir_produtos(self):
-        self.modo_atual = "produtos"
-        self.lbl_titulo.config(text="👠 ESTOQUE DE PRODUTOS")
-        self.preparar_colunas(("sku", "produto", "cor", "tamanho", "estoque", "preço", "fornecedor", "status"))
-        for i in database.exibir_produtos():
-            self.tree.insert("", "end", iid=i[0], values=(i[1], i[2], i[3], i[4], i[7], f"R$ {i[6]:.2f}", i[10], i[11]))
-
-    def exibir_vendas(self):
-        self.modo_atual = "vendas"
-        self.lbl_titulo.config(text="📑 HISTÓRICO DE VENDAS")
-        self.preparar_colunas(("cliente", "total", "forma", "data", "status"))
-        for v in database.relatorio_vendas_geral():
-            self.tree.insert("", "end", iid=v[0], values=(v[1], f"R$ {v[2]:.2f}", v[3], self.formatar_data_exibicao(v[5]), v[7]))
-
-    def exibir_financeiro(self):
-        self.modo_atual = "financeiro"
-        self.lbl_titulo.config(text="💸 FLUXO DE CAIXA")
-        self.preparar_colunas(("tipo", "entidade", "descrição", "valor", "vencimento", "pagamento", "status"))
-        with database.conectar() as conn:
+# --- Funções de produtos ---
+def cadastrar_produto(sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto=""):
+    # --- Insere um novo produto no catálogo. Se o SKU já existir com os mesmos dados, soma a quantidade. Se o SKU existir com atributos diferentes, gera um SKU novo e salva.
+    try:
+        with conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, tipo, entidade_nome, descricao, valor, data_vencimento, data_pagamento, status FROM financeiro ORDER BY data_vencimento ASC")
-            for f in cursor.fetchall():
-                tag = ("cancelado",) if f[7] == "Cancelado" else ()
-                self.tree.insert("", "end", iid=f[0], values=(f[1], f[2], f[3], f"R$ {f[4]:.2f}", self.formatar_data_exibicao(f[5]), self.formatar_data_exibicao(f[6]), f[7]), tags=tag)
+            cursor.execute("SELECT id, produto, cor, tamanho, precocusto, precovenda, categoria, material, fornecedor, status_item, foto, quantidade FROM produtos WHERE sku = ?", (sku,))
+            existente = cursor.fetchone()
+            if existente:
+                mesmo_item = (
+                    existente[1] == produto and existente[2] == cor and str(existente[3]) == str(tamanho) and
+                    float(existente[4]) == float(precocusto) and float(existente[5]) == float(precovenda) and existente[6] == categoria and
+                    existente[7] == material and existente[8] == fornecedor and existente[9] == 'Disponível'
+                )
+                if mesmo_item:
+                    cursor.execute("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?", (quantidade, existente[0]))
+                    conn.commit()
+                    return True
+                # Se SKU já existe, mas atributos mudaram, gera um novo SKU único
+                base = sku
+                suffix = 1
+                novo_sku = f"{base}_{suffix}"
+                while cursor.execute("SELECT 1 FROM produtos WHERE sku = ?", (novo_sku,)).fetchone():
+                    suffix += 1
+                    novo_sku = f"{base}_{suffix}"
+                sku = novo_sku
 
-    def abrir_cadastro_vendas(self):
-        selection = self.tree.selection()
-        cliente_selecionado = None
-        if self.modo_atual == "clientes" and selection:
-            item_id = selection[0]
-            valores = self.tree.item(item_id, "values")
-            cliente_selecionado = (item_id, valores[0], valores[2])
-        
-        from cadastro_vendas import JanelaCadastroVendas
-        JanelaCadastroVendas(self.root, cliente_selecionado)
-        self.exibir_vendas()
+            cursor.execute("""
+                INSERT INTO produtos (sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto))
+            conn.commit()
+            return True
+    except sqlite3.IntegrityError:
+        return False
 
-    # --- Lógica de Edição Corrigida ---
-    def editar_selecionado(self):
-        item_id = self.tree.selection()
-        if not item_id: return
-        id_banco = item_id[0]
+def exibir_produtos():
+    # --- Recupera a lista completa de produtos cadastrados com seus principais detalhes técnicos e comerciais ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item, foto FROM produtos ORDER BY produto ASC")
+        return cursor.fetchall()
 
-        if self.modo_atual == "clientes":
-            from cadastro_clientes import JanelaCadastroClientes
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM clientes WHERE id = ?", (id_banco,))
-                dados = cursor.fetchone()
-                if dados: JanelaCadastroClientes(self.root, dados_cliente=dados); self.exibir_clientes()
+def atualizar_produto(produto_id, **kwargs):
+    # --- Atualiza campos específicos de um produto dinamicamente e registra o horário da última modificação ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        campos = ", ".join(f"{k} = ?" for k in kwargs.keys())
+        valores = list(kwargs.values()) + [produto_id]
+        cursor.execute(f"UPDATE produtos SET {campos}, ultima_atualizacao = CURRENT_TIMESTAMP WHERE id = ?", valores)
+        conn.commit()
 
-        elif self.modo_atual == "produtos":
-            from cadastro_produtos import JanelaCadastroProdutos
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_banco,))
-                dados = cursor.fetchone()
-                if dados: JanelaCadastroProdutos(self.root, dados_produto=dados); self.exibir_produtos()
-
-        elif self.modo_atual == "financeiro":
-            self.editar_financeiro_registro()
-
-        elif self.modo_atual == "vendas":
-            self.editar_venda()
-
-    def editar_financeiro_registro(self):
-        item = self.tree.selection()
-        if not item: return
-        registro_id = item[0]
-
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT tipo, venda_id FROM financeiro WHERE id = ?", (registro_id,))
-            result = cursor.fetchone()
-            if not result: return
-            tipo, venda_id = result
-            
-            if tipo == "Despesa":
-                from cadastro_despesas import JanelaCadastroDespesas
-                cursor.execute("SELECT * FROM financeiro WHERE id = ?", (registro_id,))
-                dados = cursor.fetchone()
-                if dados: JanelaCadastroDespesas(self.root, dados_despesa=dados); self.exibir_financeiro()
-            
-            elif tipo == "Receita":
-                if venda_id:
-                    self.tree.selection_set(venda_id) # Tenta selecionar a venda
-                    self.editar_venda(venda_id)
-                else:
-                    messagebox.showinfo("Info", "Receita manual não possui edição de venda.")
-
-    def editar_venda(self, override_id=None):
-        item = self.tree.selection()
-        id_venda = override_id if override_id else (item[0] if item else None)
-        if not id_venda: return
-        
-        from cadastro_vendas import JanelaCadastroVendas
-        with database.conectar() as conn:
+# --- Funções de clientes ---
+def cadastrar_cliente(nome, cpf, tel, email, niver, tam, endereco, bairro, cidade, cep, obs, limite=0):
+    # --- Registra um novo cliente no sistema validando a unicidade do cpf e definindo o limite inicial de crédito ---
+    try:
+        with conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT v.id, c.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
-                FROM vendas v JOIN clientes c ON v.cliente_id = c.id WHERE v.id = ?
-            """, (id_venda,))
-            dados = cursor.fetchone()
-            if dados:
-                dados_venda = {
-                    'id': dados[0], 'cliente': f"{dados[2]} - {dados[3]}",
-                    'total': dados[4], 'forma': dados[5], 'parcelas': dados[6],
-                    'desconto': dados[7], 'data': dados[8]
-                }
-                JanelaCadastroVendas(self.root, cliente_selecionado=(dados[1], dados[2], dados[3]), dados_venda=dados_venda)
-                self.exibir_vendas()
-
-    # --- Outros Métodos ---
-    def mostrar_menu_contexto(self, event):
-        item = self.tree.identify_row(event.y)
-        if item:
-            self.tree.selection_set(item)
-            menu = tk.Menu(self.root, tearoff=0)
-            menu.add_command(label="Editar Selecionado", command=self.editar_selecionado)
-            menu.post(event.x_root, event.y_root)
-
-    def filtrar_busca(self):
-        termo = self.ent_busca.get().lower()
-        for item in self.tree.get_children():
-            self.tree.reattach(item, '', 'end')
-        if termo != "":
-            for item in self.tree.get_children():
-                valores = self.tree.item(item)['values']
-                if not any(termo in str(v).lower() for v in valores):
-                    self.tree.detach(item)
-
-    def atualizar_lista(self):
-        metodos = {"clientes": self.exibir_clientes, "produtos": self.exibir_produtos, "financeiro": self.exibir_financeiro, "vendas": self.exibir_vendas}
-        if self.modo_atual in metodos: metodos[self.modo_atual]()
-
-    def exibir_dashboard(self):
-        res = database.dashboard_resumo()
-        messagebox.showinfo("Dashboard", f"Contas a Receber: R$ {res['total_a_receber']:.2f}")
-
-    def abrir_cadastro_despesas(self):
-        from cadastro_despesas import JanelaCadastroDespesas
-        JanelaCadastroDespesas(self.root); self.exibir_financeiro()
-
-    def abrir_cadastro_cliente(self):
-        from cadastro_clientes import JanelaCadastroClientes
-        JanelaCadastroClientes(self.root); self.exibir_clientes()
-
-    def abrir_cadastro_produto(self):
-        from cadastro_produtos import JanelaCadastroProdutos
-        JanelaCadastroProdutos(self.root); self.exibir_produtos()
-
-    def confirmar_saida(self):
-        if messagebox.askyesno("Sair", "Deseja encerrar o sistema?"): self.root.destroy()
-
-if __name__ == "__main__":
-    database.criar_tabelas() 
-    root = tk.Tk()
-    app = SistemaAleSapatilhas(root)
-    root.mainloop()
-
-
-    # cadastro_vendas
-
-    import tkinter as tk
-from tkinter import messagebox, ttk
-import database 
-import ui_utils
-import os
-
-class JanelaCadastroVendas(tk.Toplevel):
-    def __init__(self, master, cliente_selecionado=None, dados_venda=None):
-        super().__init__(master)
-        self.dados_venda = dados_venda
-        if isinstance(self.dados_venda, tuple):
-            self.dados_venda = {
-                'id': self.dados_venda[0],
-                'cliente': f"Venda #{self.dados_venda[0]}"
-            }
-
-        # --- Importar paleta de cores ---
-        paleta = ui_utils.get_paleta()
-        self.bg_fundo = paleta["bg_fundo"]
-        self.bg_card = paleta["bg_card"]
-        self.cor_borda = paleta["cor_borda"]
-        self.cor_texto = paleta["cor_texto"]
-        self.cor_lbl = paleta["cor_lbl"]
-        self.cor_btn_1 = paleta["cor_btn_menu"]   
-        self.cor_btn_2 = paleta["cor_btn_acao"]   
-        self.cor_btn_sair = paleta["cor_btn_sair"]
-        self.cor_hover_field = paleta["cor_hover_field"]
-        self.cor_hover_btn = paleta["cor_hover_btn"]
-        self.cor_destaque = paleta["cor_destaque"]
-        self.cor_btn_pdv = paleta["cor_btn_acao"]
-        self.cor_btn_acoes = paleta["cor_btn_acao"]
-
-        self.title("Alê Sapatilhas - Painel de Venda")
-        self.configure(bg=self.bg_fundo)
+                INSERT INTO clientes (tipo, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ('Cliente', nome, cpf, tel, email, niver, tam, endereco, bairro, cidade, cep, obs, limite))
+            return cursor.lastrowid
+    except sqlite3.IntegrityError:
+        return False
         
-        # --- Aplicar dimensões ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=1200, altura_desejada=750)
-        self._manter_em_primeiro_plano()
-        
-        self.cliente_selecionado = cliente_selecionado # (id, nome, tel) ou None
-        self.carrinho = [] # [(id, produto, qtd, preco)]
+def exibir_clientes():
+    # --- Lista todos os clientes cadastrados trazendo informações de contato, status e histórico de cadastro ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, tipo, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito, data_cadastro, status_cliente FROM clientes ORDER BY nome ASC")
+        return cursor.fetchall()
 
-        self.setup_layout()
-        self.carregar_produtos()
-        
-        # Se cliente foi passado, pré-selecionar
-        if self.cliente_selecionado:
-            self.lbl_info_cliente.config(text=f"✓ {self.cliente_selecionado[1]}", fg="green")
-        elif self.dados_venda is not None:
-            self.lbl_info_cliente.config(text=f"✓ {self.dados_venda.get('cliente', 'Venda')}", fg="green")
-        
-        self.grab_set()
+def atualizar_cliente(cliente_id, **kwargs):
+    # --- Modifica os dados de um cliente existente de forma flexível utilizando argumentos nomeados ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        campos = ", ".join(f"{k} = ?" for k in kwargs.keys())
+        valores = list(kwargs.values()) + [cliente_id]
+        cursor.execute(f"UPDATE clientes SET {campos} WHERE id = ?", valores)
+        conn.commit()
 
-    def setup_layout(self):
-        # Frame Esquerdo: Busca e Itens
-        self.frame_esq = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=20)
-        self.frame_esq.pack(side="left", fill="both", expand=True)
+def registrar_interacao(cliente_id, tipo, assunto, detalhes, vendedor):
+    with conectar() as conn:
+        conn.execute("INSERT INTO cliente_interacoes (cliente_id, tipo_contato, assunto, detalhes, vendedor_responsavel) VALUES (?,?,?,?,?)",
+                     (cliente_id, tipo, assunto, detalhes, vendedor))
 
-        # --- SEÇÃO CLIENTE ---
-        lbl_cli_head = tk.Label(self.frame_esq, text="👤 CLIENTE", font=("Segoe UI", 10, "bold"), bg=self.bg_fundo, fg=self.cor_lbl)
-        lbl_cli_head.pack(anchor="w")
-        
-        frame_cli = tk.Frame(self.frame_esq, bg=self.bg_fundo)
-        frame_cli.pack(fill="x", pady=5)
-        
-        self.ent_busca_cliente = tk.Entry(frame_cli, font=("Segoe UI", 11), relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_busca_cliente.pack(side="left", fill="x", expand=True, ipady=4)
-        self.ent_busca_cliente.placeholder = "Digite o nome e pressione Enter..."
-        
-        btn_buscar_cli = tk.Button(frame_cli, text="BUSCAR", bg=self.cor_btn_acoes, fg="white", font=("Segoe UI", 8, "bold"), 
-                                   relief="flat", padx=10, command=self.buscar_cliente)
-        btn_buscar_cli.pack(side="left", padx=5)
+# --- Funções de apoio para vendas e financeiro ---
+def atualizar_financeiro(financeiro_id, **kwargs):
+    with conectar() as conn:
+        cursor = conn.cursor()
+        campos = ", ".join(f"{k} = ?" for k in kwargs.keys())
+        valores = list(kwargs.values()) + [financeiro_id]
+        cursor.execute(f"UPDATE financeiro SET {campos} WHERE id = ?", valores)
+        conn.commit()
 
-        # Campos do cliente
-        frame_campos_cli = tk.Frame(self.frame_esq, bg=self.bg_fundo)
-        frame_campos_cli.pack(fill="x", pady=5)
-        
-        # Nome
-        tk.Label(frame_campos_cli, text="Nome:", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9)).grid(row=0, column=0, sticky="w")
-        self.ent_nome_cli = tk.Entry(frame_campos_cli, font=("Segoe UI", 10), relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_nome_cli.grid(row=0, column=1, sticky="ew", padx=(5, 0))
-        
-        # CPF
-        tk.Label(frame_campos_cli, text="CPF:", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9)).grid(row=1, column=0, sticky="w")
-        self.ent_cpf_cli = tk.Entry(frame_campos_cli, font=("Segoe UI", 10), relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_cpf_cli.grid(row=1, column=1, sticky="ew", padx=(5, 0))
-        
-        # Telefone
-        tk.Label(frame_campos_cli, text="Telefone:", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9)).grid(row=2, column=0, sticky="w")
-        self.ent_tel_cli = tk.Entry(frame_campos_cli, font=("Segoe UI", 10), relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_tel_cli.grid(row=2, column=1, sticky="ew", padx=(5, 0))
-        
-        # Endereço completo
-        tk.Label(frame_campos_cli, text="Endereço:", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9)).grid(row=3, column=0, sticky="w")
-        self.ent_end_cli = tk.Entry(frame_campos_cli, font=("Segoe UI", 10), relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_end_cli.grid(row=3, column=1, sticky="ew", padx=(5, 0))
-        
-        # Número
-        tk.Label(frame_campos_cli, text="Número:", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9)).grid(row=4, column=0, sticky="w")
-        self.ent_num_cli = tk.Entry(frame_campos_cli, font=("Segoe UI", 10), relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_num_cli.grid(row=4, column=1, sticky="ew", padx=(5, 0))
-        
-        # Bairro
-        tk.Label(frame_campos_cli, text="Bairro:", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9)).grid(row=5, column=0, sticky="w")
-        self.ent_bairro_cli = tk.Entry(frame_campos_cli, font=("Segoe UI", 10), relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_bairro_cli.grid(row=5, column=1, sticky="ew", padx=(5, 0))
-        
-        # Cidade
-        tk.Label(frame_campos_cli, text="Cidade:", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9)).grid(row=6, column=0, sticky="w")
-        self.ent_cidade_cli = tk.Entry(frame_campos_cli, font=("Segoe UI", 10), relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_cidade_cli.grid(row=6, column=1, sticky="ew", padx=(5, 0))
-        
-        # Status VIP
-        tk.Label(frame_campos_cli, text="Status:", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 9)).grid(row=7, column=0, sticky="w")
-        self.var_status_cli = tk.StringVar(value="Ativo")
-        self.cb_status_cli = ttk.Combobox(frame_campos_cli, textvariable=self.var_status_cli, values=["Ativo", "Vip", "Inativo"], state="readonly", font=("Segoe UI", 10))
-        self.cb_status_cli.grid(row=7, column=1, sticky="ew", padx=(5, 0))
-        
-        frame_campos_cli.columnconfigure(1, weight=1)
 
-        self.lbl_info_cliente = tk.Label(self.frame_esq, text="Nenhum cliente selecionado", font=("Segoe UI", 9, "italic"), bg=self.bg_fundo, fg="red")
-        self.lbl_info_cliente.pack(anchor="w")
+def buscar_cliente_nome(termo):
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM clientes WHERE nome LIKE ? OR telefone LIKE ? LIMIT 1", (f"%{termo}%", f"%{termo}%"))
+        return cursor.fetchone()
 
-        # --- SEÇÃO PRODUTO ---
-        tk.Label(self.frame_esq, text="👠 PRODUTO", font=("Segoe UI", 10, "bold"), bg=self.bg_fundo, fg=self.cor_lbl).pack(anchor="w", pady=(20, 5))
-        
-        self.cb_produtos = ttk.Combobox(self.frame_esq, font=("Segoe UI", 11), state="readonly")
-        self.cb_produtos.pack(fill="x", ipady=4)
-        
-        btn_add = tk.Button(self.frame_esq, text="ADICIONAR AO CARRINHO (F2)", bg=self.cor_destaque, fg="white", 
-                            font=("Segoe UI", 10, "bold"), relief="flat", command=self.adicionar_item)
-        btn_add.pack(fill="x", pady=10, ipady=8)
 
-        # --- TABELA CARRINHO ---
-        # Adicionada coluna de Foto para mostrar miniatura
-        self.tree = ttk.Treeview(self.frame_esq, columns=("Foto", "ID", "Produto", "Qtd", "Preço", "Subtotal"), show="headings")
-        for col, width in [("Foto", 60), ("ID", 40), ("Produto", 150), ("Qtd", 50), ("Preço", 80), ("Subtotal", 80)]:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=width, anchor="center")
-        self.tree.pack(fill="both", expand=True)
-        
-        btn_remover = tk.Button(self.frame_esq, text="REMOVER ITEM SELECIONADO", bg="#ef4444", fg="white", font=("Segoe UI", 8), relief="flat", command=self.remover_item)
-        btn_remover.pack(anchor="e", pady=5)
+def listar_itens():
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, status_item, foto FROM produtos WHERE status_item != 'Indisponível' ORDER BY produto ASC")
+        return cursor.fetchall()
 
-        # Frame Direito: Resumo e Atalhos
-        self.frame_dir = tk.Frame(self, bg=self.bg_card, width=300, padx=20, pady=20, highlightthickness=1, highlightbackground=self.cor_borda)
-        self.frame_dir.pack(side="right", fill="y")
-        self.frame_dir.pack_propagate(False)
 
-        # --- ATALHOS ---
-        tk.Label(self.frame_dir, text="🛠️ ATALHOS RÁPIDOS", font=("Segoe UI", 10, "bold"), bg=self.bg_card).pack(pady=(0, 10))
-        
-        botoes_atalho = [
-            ("👤 EDITAR CLIENTE", self.atalho_cliente),
-            ("👠 VER ESTOQUE", self.atalho_estoque),
-            ("❌ CANCELAR", self.cancelar_venda)
-        ]
-        
-        for txt, cmd in botoes_atalho:
-            btn = tk.Button(self.frame_dir, text=txt, bg=self.bg_fundo, fg=self.cor_texto, font=("Segoe UI", 9), relief="flat", highlightthickness=1, highlightbackground=self.cor_borda, command=cmd)
-            btn.pack(fill="x", pady=3, ipady=5)
+# --- MOTORES DE CÁLCULO (AUXILIARES) ---
 
-        # --- TOTAIS ---
-        self.spacer = tk.Label(self.frame_dir, bg=self.bg_card).pack(expand=True)
-        
-        self.lbl_total_itens = tk.Label(self.frame_dir, text="ITENS: 0", font=("Segoe UI", 12), bg=self.bg_card, fg=self.cor_lbl)
-        self.lbl_total_itens.pack()
-        
-        self.lbl_valor_total = tk.Label(self.frame_dir, text="R$ 0,00", font=("Segoe UI", 24, "bold"), bg=self.bg_card, fg=self.cor_destaque)
-        self.lbl_valor_total.pack(pady=10)
+def adicionar_meses(data_obj, meses):
+    ano = data_obj.year + (data_obj.month + meses - 1) // 12
+    mes = (data_obj.month + meses - 1) % 12 + 1
+    ultimo_dia = [31, 29 if ano % 4 == 0 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mes-1]
+    dia = min(data_obj.day, ultimo_dia)
+    return datetime(ano, mes, dia)
 
-        self.btn_pagamento = tk.Button(self.frame_dir, text="PAGAMENTO (F5)", bg=self.cor_btn_pdv, fg="white", font=("Segoe UI", 12, "bold"), relief="flat", command=self.abrir_pagamento)
-        self.btn_pagamento.pack(fill="x", ipady=15)
+def calcular_valor_com_ajustes(valor_base, t_enc, v_enc, t_desc, v_desc):
+    enc = v_enc if t_enc == 'Valor Fixo' else round(valor_base * (v_enc / 100), 2)
+    des = v_desc if t_desc == 'Valor Fixo' else round(valor_base * (v_desc / 100), 2)
+    return round(valor_base + enc - des, 2), enc, des
 
-    # --- LÓGICA DO PDV ---
-    def _manter_em_primeiro_plano(self):
+def realizar_venda_crediario(cliente_id, lista_produtos, parcelas, desc_venda=0):
+    """Lógica de venda que alimenta a tabela 'receitas' via crediário."""
+    with conectar() as conn:
+        cursor = conn.cursor()
+        total_bruto = sum(p['qtd'] * p['preco'] for p in lista_produtos)
+        total_liquido = total_bruto - desc_venda
+        
+        cursor.execute("INSERT INTO vendas (cliente_id, valor_bruto, desconto, valor_total, forma_pagamento, qtd_parcelas) VALUES (?,?,?,?,?,?)",
+                       (cliente_id, total_bruto, desc_venda, total_liquido, 'Crediário', parcelas))
+        venda_id = cursor.lastrowid
+
+        valor_parc = round(total_liquido / parcelas, 2)
+        for i in range(parcelas):
+            venc = adicionar_meses(datetime.now(), 'Mensal', i).strftime("%Y-%m-%d")
+            cursor.execute("""INSERT INTO receitas (venda_id, cliente_id, descricao, valor_base, valor_esperado, data_vencimento, parcela_atual, total_parcelas) 
+                              VALUES (?,?,?,?,?,?,?,?)""", 
+                           (venda_id, cliente_id, f"Parcela {i+1}/{parcelas} - Venda #{venda_id}", valor_parc, valor_parc, venc, i+1, parcelas))
+        conn.commit()
+
+def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, desconto_total=0):
+    """Executa a venda e projeta as parcelas nas datas específicas de fluxo de caixa[cite: 1]."""
+    with conectar() as conn:
+        cursor = conn.cursor()
         try:
-            self.attributes("-topmost", True)
-        except Exception as e:
-            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}")
-    def carregar_produtos(self):
-        self.produtos_db = database.listar_itens()
-        # Formato: "ID - Produto (Cor) - Tam"
-        self.cb_produtos["values"] = [f"{p[0]} - {p[1]} ({p[2]}) - T:{p[3]} | R$ {p[5]:.2f}" for p in self.produtos_db]
-
-    def buscar_cliente(self):
-        termo = self.ent_busca_cliente.get().strip()
-        if not termo: return
-        
-        res = database.buscar_cliente_nome(termo) # Função que criamos no database.py
-        if res:
-            self.cliente_selecionado = res[0] # Pega o primeiro encontrado
-            self.lbl_info_cliente.config(text=f"✓ {self.cliente_selecionado[1]}", fg="green")
-            # Preencher campos
-            cli = res[0]
-            self.ent_nome_cli.delete(0, tk.END)
-            self.ent_nome_cli.insert(0, cli[1] or "")
-            self.ent_cpf_cli.delete(0, tk.END)
-            self.ent_cpf_cli.insert(0, cli[2] or "")
-            self.ent_tel_cli.delete(0, tk.END)
-            self.ent_tel_cli.insert(0, cli[3] or "")
-            endereco_parts = (cli[7] or "").split(", ")
-            if len(endereco_parts) > 1:
-                self.ent_end_cli.delete(0, tk.END)
-                self.ent_end_cli.insert(0, endereco_parts[0])
-                self.ent_num_cli.delete(0, tk.END)
-                self.ent_num_cli.insert(0, endereco_parts[1] if len(endereco_parts) > 1 else "")
-            else:
-                self.ent_end_cli.delete(0, tk.END)
-                self.ent_end_cli.insert(0, cli[7] or "")
-                self.ent_num_cli.delete(0, tk.END)
-            self.ent_bairro_cli.delete(0, tk.END)
-            self.ent_bairro_cli.insert(0, cli[8] or "")
-            self.ent_cidade_cli.delete(0, tk.END)
-            self.ent_cidade_cli.insert(0, cli[9] or "")
-            self.var_status_cli.set(cli[14] or "Ativo")
-        else:
-            messagebox.showerror("Erro", "Cliente não encontrado!")
-
-    def adicionar_item(self):
-        sel = self.cb_produtos.current()
-        if sel < 0: return
-        
-        p = self.produtos_db[sel] # (id, prod, cor, tam, custo, venda, qtd, cat, mat, forn, status, foto)
-        
-        if p[6] <= 0:
-            messagebox.showwarning("Estoque", "Produto sem estoque disponível.")
-            return
-
-        # Verifica se já está no carrinho para somar qtd
-        for item in self.carrinho:
-            if item[0] == p[0]:
-                messagebox.showinfo("PDV", "Item já adicionado. Ajuste a quantidade na tabela (Funcionalidade em breve) ou remova e adicione novamente.")
-                return
-
-        subtotal = p[5]
-        
-        # Carregar miniatura da foto
-        foto_miniatura = self.carregar_miniatura_foto(p[12])  # p[12] é o caminho da foto
-        
-        self.carrinho.append([p[0], p[1], 1, p[5], subtotal, foto_miniatura])
-        self.tree.insert("", "end", values=("", p[0], p[1], 1, f"R$ {p[5]:.2f}", f"R$ {subtotal:.2f}"))
-        
-        # Inserir a imagem na primeira coluna
-        item_id = self.tree.get_children()[-1]  # Último item inserido
-        if foto_miniatura:
-            self.tree.set(item_id, "Foto", "")  # Placeholder para a imagem
-            # Armazenar referência da imagem para evitar garbage collection
-            if not hasattr(self, 'imagens_carrinho'):
-                self.imagens_carrinho = []
-            self.imagens_carrinho.append(foto_miniatura)
-        
-        self.atualizar_totais()
-
-    def carregar_miniatura_foto(self, caminho_foto):
-        """Carrega e redimensiona a foto do produto para miniatura"""
-        if not caminho_foto or not os.path.exists(caminho_foto):
-            return None
-        
-        try:
-            # Carregar imagem e redimensionar para 40x40 pixels
-            img = Image.open(caminho_foto)
-            img = img.resize((40, 40), Image.Resampling.LANCZOS)
-            return tk.PhotoImage(img)
-        except Exception as e:
-            print(f"Erro ao carregar foto {caminho_foto}: {e}")
-            return None
-
-    def remover_item(self):
-        sel = self.tree.selection()
-        if not sel: return
-        item_values = self.tree.item(sel)["values"]
-        # Remover do carrinho (item[1] é o ID do produto)
-        self.carrinho = [i for i in self.carrinho if i[0] != item_values[1]]  # item_values[1] é o ID
-        self.tree.delete(sel)
-        self.atualizar_totais()
-
-    def atualizar_totais(self):
-        total_venda = sum(item[4] for item in self.carrinho)
-        self.lbl_total_itens.config(text=f"ITENS: {len(self.carrinho)}")
-        self.lbl_valor_total.config(text=f"R$ {total_venda:.2f}")
-
-    def abrir_pagamento(self):
-        if not self.cliente_selecionado:
-            messagebox.showwarning("PDV", "Selecione um cliente antes de prosseguir.")
-            return
-        if not self.carrinho:
-            messagebox.showwarning("PDV", "Carrinho vazio!")
-            return
-        
-        total = sum(item[4] for item in self.carrinho)
-        # Chama a classe de pagamento (Você deve criar a JanelaPagamento similar a esta)
-        from cadastro_pagamento import JanelaPagamento
-        JanelaPagamento(self, self.cliente_selecionado, self.carrinho, total)
-
-    # --- ATALHOS ---
-    def atalho_cliente(self):
-        if self.cliente_selecionado:
-            from cadastro_clientes import JanelaCadastroClientes
-            JanelaCadastroClientes(self, dados_cliente=self.cliente_selecionado)
-        else: messagebox.showinfo("Dica", "Busque um cliente primeiro para editar.")
-
-    def atalho_estoque(self):
-        # Mostrar lista de produtos disponíveis
-        from tkinter import Toplevel, ttk
-        janela_estoque = Toplevel(self)
-        janela_estoque.title("Estoque de Produtos")
-        janela_estoque.configure(bg=self.bg_fundo)
-        ui_utils.calcular_dimensoes_janela(janela_estoque, largura_desejada=800, altura_desejada=600)
-        
-        tk.Label(janela_estoque, text="📦 ESTOQUE DISPONÍVEL", font=("Segoe UI", 14, "bold"), bg=self.bg_fundo, fg=self.cor_texto).pack(pady=10)
-        
-        tree = ttk.Treeview(janela_estoque, columns=("SKU", "Produto", "Cor", "Tam", "Qtd", "Preço"), show="headings")
-        for col, width in [("SKU", 80), ("Produto", 150), ("Cor", 60), ("Tam", 40), ("Qtd", 50), ("Preço", 80)]:
-            tree.heading(col, text=col)
-            tree.column(col, width=width, anchor="center")
-        tree.pack(fill="both", expand=True, padx=20, pady=10)
-        
-        produtos = database.listar_itens()
-        for p in produtos:
-            if p[6] > 0:  # quantidade > 0
-                tree.insert("", "end", values=(p[1], p[2], p[3], p[4], p[6], f"R$ {p[5]:.2f}"))
-        
-        btn_fechar = tk.Button(janela_estoque, text="FECHAR", bg=self.cor_btn_sair, fg="white", font=("Segoe UI", 10, "bold"), command=janela_estoque.destroy)
-        btn_fechar.pack(pady=10)
-
-    def cancelar_venda(self):
-        if messagebox.askyesno("Cancelar Venda", "Tem certeza que deseja cancelar a venda? Todos os dados serão perdidos."):
-            self.destroy()
-
-    def atalho_vendas(self):
-        messagebox.showinfo("Vendas", "Abrindo resumo de vendas do dia...")
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.withdraw()
-    JanelaCadastroVendas(root)
-    root.mainloop()
-
-
-    # cadastro_vendas Vs2
-
-    import tkinter as tk
-from tkinter import messagebox, ttk
-import database 
-import ui_utils
-from datetime import datetime
-
-class JanelaCadastroVendas(tk.Toplevel):
-    def __init__(self, master, cliente_selecionado=None, dados_venda=None):
-        super().__init__(master)
-        
-        # Configurações Iniciais
-        paleta = ui_utils.get_paleta()
-        self.bg_fundo = paleta["bg_fundo"]
-        self.bg_card = paleta["bg_card"]
-        self.cor_borda = paleta["cor_borda"]
-        self.cor_texto = paleta["cor_texto"]
-        self.cor_lbl = paleta["cor_lbl"]
-        self.cor_destaque = paleta["cor_destaque"]
-        self.cor_btn_menu = paleta["cor_btn_menu"]
-        self.cor_btn_sair = paleta["cor_btn_sair"]
-        
-        self.title("Sistema Alê Sapatilhas - Checkout de Vendas")
-        self.configure(bg=self.bg_fundo)
-        ui_utils.calcular_dimensoes_janela(self, maximizar=True)
-        
-        # Variáveis de Controle
-        self.cliente_atual = cliente_selecionado # (id, nome, cpf, tel...)
-        self.carrinho_itens = []
-        self.modo_venda = "Venda Nova" if not dados_venda else "Edição"
-        
-        self.setup_layout()
-        self.configurar_estilos()
-        
-        # Carregamento Inicial
-        if self.cliente_atual:
-            self.preencher_dados_cliente(self.cliente_atual)
-        self.listar_estoque_completo()
-        
-        self.grab_set()
-
-    def configurar_estilos(self):
-        self.style = ttk.Style()
-        self.style.theme_use("clam")
-        self.style.configure("PDV.Treeview", background=self.bg_card, foreground=self.cor_texto, rowheight=30)
-        self.style.configure("PDV.Treeview.Heading", font=("Segoe UI", 10, "bold"))
-
-    def setup_layout(self):
-        # --- SIDEBAR (Esquerda) ---
-        self.sidebar = tk.Frame(self, bg=self.cor_btn_sair, width=200)
-        self.sidebar.pack(side="left", fill="y")
-        self.sidebar.pack_propagate(False)
-
-        tk.Label(self.sidebar, text="AÇÕES PDV", font=("Segoe UI", 14, "bold"), 
-                 bg=self.cor_btn_sair, fg="white", pady=20).pack()
-
-        botoes = [
-            ("👤 Cadastrar Cliente", self.abrir_novo_cliente),
-            ("📝 Editar Cliente", self.abrir_edicao_cliente),
-            ("👠 Listar Estoque", self.listar_estoque_completo),
-            ("❌ Remover Item", self.remover_do_carrinho),
-            ("💰 Finalizar Venda", self.finalizar_venda),
-            ("⬅ Cancelar", self.destroy)
-        ]
-
-        for texto, comando in botoes:
-            tk.Button(self.sidebar, text=texto, command=comando, font=("Segoe UI", 10, "bold"),
-                      bg=self.cor_btn_menu, fg="white", relief="flat", padx=15, pady=10,
-                      activebackground=self.cor_destaque, cursor="hand2", anchor="w").pack(fill="x", pady=1)
-
-        # --- CONTAINER PRINCIPAL (Direita) ---
-        self.main_container = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=10)
-        self.main_container.pack(side="right", fill="both", expand=True)
-
-        # 1. ÁREA DO CLIENTE (Topo)
-        self.setup_sessao_cliente()
-
-        # 2. ÁREA DE PRODUTOS E BUSCA (Meio)
-        self.setup_sessao_produtos()
-
-        # 3. ÁREA DO CARRINHO E TOTAL (Baixo)
-        self.setup_sessao_carrinho()
-
-    def setup_sessao_cliente(self):
-        frame_cli = tk.Frame(self.main_container, bg=self.bg_fundo)
-        frame_cli.pack(fill="x", pady=(0, 10))
-
-        # Busca Rápida Cliente
-        lbl_busca = tk.Label(frame_cli, text="🔍 LOCALIZAR CLIENTE", font=("Segoe UI", 10, "bold"), 
-                             bg=self.bg_fundo, fg=self.cor_lbl)
-        lbl_busca.pack(anchor="w")
-        
-        self.ent_busca_cli = tk.Entry(frame_cli, font=("Segoe UI", 11), bg=self.bg_card, relief="flat")
-        self.ent_busca_cli.pack(fill="x", pady=5)
-        self.ent_busca_cli.bind("<KeyRelease>", lambda e: self.buscar_cliente_db())
-
-        # Treeview Resultados Cliente (3 linhas)
-        self.tree_cli = ttk.Treeview(frame_cli, columns=("nome", "cpf", "tel"), show="headings", height=3, style="PDV.Treeview")
-        self.tree_cli.heading("nome", text="NOME")
-        self.tree_cli.heading("cpf", text="CPF")
-        self.tree_cli.heading("tel", text="TELEFONE")
-        self.tree_cli.pack(fill="x")
-        self.tree_cli.bind("<<TreeviewSelect>>", self.selecionar_cliente_busca)
-
-        # Display Dados Cliente (Alinhado à Esquerda)
-        self.lbl_dados_cli = tk.Label(frame_cli, text="Nenhum cliente selecionado", font=("Segoe UI", 10),
-                                      bg=self.bg_fundo, fg=self.cor_texto, justify="left", anchor="w")
-        self.lbl_dados_cli.pack(fill="x", pady=10)
-
-    def setup_sessao_produtos(self):
-        frame_prod = tk.Frame(self.main_container, bg=self.bg_fundo)
-        frame_prod.pack(fill="both", expand=True)
-
-        # Barra de Busca Produto + Tamanho
-        barra_busca = tk.Frame(frame_prod, bg=self.bg_fundo)
-        barra_busca.pack(fill="x")
-
-        tk.Label(barra_busca, text="👠 PRODUTO:", font=("Segoe UI", 9, "bold"), bg=self.bg_fundo).grid(row=0, column=0, sticky="w")
-        self.ent_busca_prod = tk.Entry(barra_busca, font=("Segoe UI", 10), width=40)
-        self.ent_busca_prod.grid(row=0, column=1, padx=5, pady=5)
-        self.ent_busca_prod.bind("<KeyRelease>", lambda e: self.filtrar_produtos())
-
-        tk.Label(barra_busca, text="TAMANHO:", font=("Segoe UI", 9, "bold"), bg=self.bg_fundo).grid(row=0, column=2, padx=(15, 0))
-        self.ent_tam_filtro = tk.Entry(barra_busca, font=("Segoe UI", 10), width=5)
-        self.ent_tam_filtro.grid(row=0, column=3, padx=5)
-        self.ent_tam_filtro.bind("<KeyRelease>", lambda e: self.filtrar_produtos())
-
-        # Treeview Estoque
-        cols = ("id", "produto", "cor", "tam", "preco", "estoque", "status")
-        self.tree_estoque = ttk.Treeview(frame_prod, columns=cols, show="headings", height=8, style="PDV.Treeview")
-        for col in cols:
-            self.tree_estoque.heading(col, text=col.upper())
-            self.tree_estoque.column(col, width=100, anchor="center")
-        self.tree_estoque.pack(fill="both", expand=True, pady=5)
-        self.tree_estoque.bind("<Double-1>", self.adicionar_ao_carrinho)
-
-    def setup_sessao_carrinho(self):
-        frame_cart = tk.Frame(self.main_container, bg=self.bg_card, padx=10, pady=10, 
-                              highlightthickness=1, highlightbackground=self.cor_borda)
-        frame_cart.pack(fill="x", pady=10)
-
-        tk.Label(frame_cart, text="🛒 RESUMO DA COMPRA", font=("Segoe UI", 10, "bold"), bg=self.bg_card).pack(anchor="w")
-
-        self.tree_cart = ttk.Treeview(frame_cart, columns=("prod", "cor", "tam", "qtd", "sub"), show="headings", height=5, style="PDV.Treeview")
-        self.tree_cart.heading("prod", text="PRODUTO")
-        self.tree_cart.heading("cor", text="COR")
-        self.tree_cart.heading("tam", text="TAM")
-        self.tree_cart.heading("qtd", text="QTD")
-        self.tree_cart.heading("sub", text="SUBTOTAL")
-        self.tree_cart.pack(fill="x", pady=5)
-
-        # Valor Total
-        self.lbl_total = tk.Label(frame_cart, text="TOTAL: R$ 0,00", font=("Segoe UI", 18, "bold"), 
-                                  bg=self.bg_card, fg=self.cor_destaque)
-        self.lbl_total.pack(anchor="e")
-
-    # --- LÓGICA DE NEGÓCIO ---
-
-    def buscar_cliente_db(self):
-        termo = self.ent_busca_cli.get()
-        self.tree_cli.delete(*self.tree_cli.get_children())
-        if len(termo) > 2:
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT id, nome, cpf, telefone, endereco_completo FROM clientes WHERE nome LIKE ?", (f"%{termo}%",))
-                for row in cursor.fetchall():
-                    self.tree_cli.insert("", "end", iid=row[0], values=(row[1], row[2], row[3], row[4]))
-
-    def selecionar_cliente_busca(self, event):
-        sel = self.tree_cli.selection()
-        if sel:
-            id_cli = sel[0]
-            valores = self.tree_cli.item(id_cli, "values")
-            self.cliente_atual = (id_cli, valores[0], valores[1], valores[2], valores[3])
-            self.preencher_dados_cliente(self.cliente_atual)
-
-    def preencher_dados_cliente(self, dados):
-        info = f"CLIENTE: {dados[1]}  |  CPF: {dados[2]}  |  TEL: {dados[3]}\nENDEREÇO: {dados[4] if len(dados)>4 else 'N/A'}"
-        self.lbl_dados_cli.config(text=info)
-
-    def listar_estoque_completo(self):
-        self.tree_estoque.delete(*self.tree_estoque.get_children())
-        for p in database.listar_itens():
-            # Filtro: id[0], sku[1], prod[2], cor[3], tam[4], custo[5], venda[6], qtd[7], status[11]
-            self.tree_estoque.insert("", "end", iid=p[0], values=(p[0], p[2], p[3], p[4], f"R$ {p[6]:.2f}", p[7], p[11]))
-
-    def filtrar_produtos(self):
-        termo = self.ent_busca_prod.get().lower()
-        tam = self.ent_tam_filtro.get()
-        self.tree_estoque.delete(*self.tree_estoque.get_children())
-        for p in database.listar_itens():
-            match_nome = termo in p[2].lower() or termo in p[3].lower()
-            match_tam = tam == "" or str(p[4]) == tam
-            if match_nome and match_tam:
-                self.tree_estoque.insert("", "end", iid=p[0], values=(p[0], p[2], p[3], p[4], f"R$ {p[6]:.2f}", p[7], p[11]))
-
-    def adicionar_ao_carrinho(self, event):
-        sel = self.tree_estoque.selection()
-        if not sel: return
-        id_prod = sel[0]
-        item = self.tree_estoque.item(id_prod, "values")
-        
-        # Lógica de somar se já existir ou novo item
-        preco = float(item[4].replace("R$ ", ""))
-        self.carrinho_itens.append({'id': id_prod, 'prod': item[1], 'cor': item[2], 'tam': item[3], 'preco': preco})
-        self.atualizar_carrinho_view()
-
-    def remover_do_carrinho(self):
-        sel = self.tree_cart.selection()
-        if not sel: return
-        idx = self.tree_cart.index(sel[0])
-        del self.carrinho_itens[idx]
-        self.atualizar_carrinho_view()
-
-    def atualizar_carrinho_view(self):
-        self.tree_cart.delete(*self.tree_cart.get_children())
-        total = 0
-        for item in self.carrinho_itens:
-            self.tree_cart.insert("", "end", values=(item['prod'], item['cor'], item['tam'], 1, f"R$ {item['preco']:.2f}"))
-            total += item['preco']
-        self.lbl_total.config(text=f"TOTAL: R$ {total:.2f}")
-
-    def abrir_novo_cliente(self):
-        from cadastro_clientes import JanelaCadastroClientes
-        # Mock de callback para quando fechar
-        def callback():
-            self.buscar_cliente_db() # Atualiza busca
-        JanelaCadastroClientes(self.master)
-
-    def abrir_edicao_cliente(self):
-        if not self.cliente_atual:
-            messagebox.showwarning("Aviso", "Selecione um cliente primeiro!")
-            return
-        from cadastro_clientes import JanelaCadastroClientes
-        # Aqui você buscaria os dados completos do ID para passar
-        JanelaCadastroClientes(self.master, dados_cliente=self.cliente_atual)
-
-    def finalizar_venda(self):
-        if not self.cliente_atual or not self.carrinho_itens:
-            messagebox.showerror("Erro", "Cliente e Produtos são obrigatórios!")
-            return
-        
-        from cadastro_pagamento import JanelaPagamento
-        total = float(self.lbl_total.cget("text").replace("TOTAL: R$ ", ""))
-        JanelaPagamento(self, self.cliente_atual, self.carrinho_itens, total)
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    JanelaCadastroVendas(root)
-    root.mainloop()
-
-
-    # cadastro_vendas Vs3
-
-
-    import tkinter as tk
-from tkinter import messagebox, ttk
-import database 
-import ui_utils
-from datetime import datetime
-
-class JanelaCadastroVendas(tk.Toplevel):
-    def __init__(self, master, cliente_selecionado=None, dados_venda=None):
-        super().__init__(master)
-        self.title("Alê Sapatilhas - Checkout de Vendas")
-
-        # --- Dimensões e Cores ---
-        ui_utils.calcular_dimensoes_janela(self, maximizar=True)
-        paleta = ui_utils.get_paleta()
-        self.bg_fundo = paleta["bg_fundo"]
-        self.bg_card = paleta["bg_card"]
-        self.cor_borda = paleta["cor_borda"]
-        self.cor_texto = paleta["cor_texto"]
-        self.cor_destaque = paleta["cor_destaque"]
-        self.cor_btn_menu = paleta["cor_btn_menu"]
-        self.cor_btn_sair = paleta["cor_btn_sair"]
-        self.cor_hover_btn = paleta["cor_hover_btn"]
-        
-        self.configure(bg=self.bg_fundo)
-        
-        # --- Variáveis de Controle ---
-        self.cliente_atual = cliente_selecionado  # (id, nome, telefone)
-        self.modo_venda = "Venda Nova" if not dados_venda else "Edição"
-        self.carrinho_itens = []
-        self.botoes_menu = {}
-        self.modo_atual = "vendas"
-        
-        self.configurar_estilos()
-        self.setup_layout()
-
-        # --- Carregamento Inicial ---
-        if self.cliente_atual:
-            self.preencher_dados_cliente(self.cliente_atual)
-        
-        self.listar_estoque_completo()
-        self.grab_set()
-
-    def configurar_estilos(self):
-        self.style = ttk.Style()
-        self.style.theme_use("clam")
-        self.style.configure("PDV.Treeview", background=self.bg_card, foreground=self.cor_texto, 
-                             rowheight=30, borderwidth=0, font=("Segoe UI", 10))
-        self.style.configure("PDV.Treeview.Heading", font=("Segoe UI", 10, "bold"), background=self.bg_card)
-        self.style.map("PDV.Treeview", background=[('selected', self.cor_destaque)])
-
-    def setup_layout(self):
-        # --- SIDEBAR (Esquerda) ---
-        self.sidebar = tk.Frame(self, bg=self.cor_btn_sair, width=220)
-        self.sidebar.pack(side="left", fill="y")
-        self.sidebar.pack_propagate(False)
-
-        tk.Label(self.sidebar, text="ALÊ\nSAPATILHAS", font=("Segoe UI", 16, "bold"), 
-                 bg=self.cor_btn_sair, fg="white", pady=20).pack()
-    
-        btn_estilo = {
-            "font": ("Segoe UI", 10, "bold"), "bg": self.cor_btn_menu, "fg": "white",
-            "relief": "flat", "activebackground": self.cor_hover_btn, 
-            "activeforeground": "white", "cursor": "hand2", "anchor": "w", "padx": 20
-        }
-
-        botoes = [
-            ("💰 FINALIZAR VENDA", self.finalizar_venda, "vendas"),
-            ("❌ REMOVER ITEM", self.remover_do_carrinho, "vendas"),
-            ("", None, None), 
-            ("👤 NOVO CLIENTE", self.abrir_novo_cliente, "clientes"),
-            ("📦 NOVO PRODUTO", self.abrir_cadastro_produto, "produtos"),
-            ("🔄 ATUALIZAR", self.listar_estoque_completo, None),
-            ("", None, None),
-            ("🚪 VOLTAR", self.destroy, None)
-        ]
-
-        for texto, comando, modo in botoes:
-            if texto == "":
-                tk.Label(self.sidebar, bg=self.cor_btn_sair, pady=5).pack()
-                continue
-
-            btn = tk.Button(self.sidebar, text=texto, command=lambda c=comando, m=modo: self.executar_comando_menu(c, m), **btn_estilo)
-            btn.pack(fill="x", pady=2)
-            if modo:
-                self.botoes_menu.setdefault(modo, []).append(btn)
-
-        # --- CONTAINER PRINCIPAL ---
-        self.main_container = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=10)
-        self.main_container.pack(side="right", fill="both", expand=True)
-
-        # 1. ÁREA DO CLIENTE
-        self.setup_sessao_cliente()
-
-        # 2. ÁREA DE PRODUTOS
-        self.setup_sessao_produtos()
-
-        # 3. ÁREA DO CARRINHO
-        self.setup_sessao_carrinho()
-
-    def setup_sessao_cliente(self):
-        frame_cli = tk.LabelFrame(self.main_container, text=" Seleção de Cliente ", bg=self.bg_fundo, fg=self.cor_texto, font=("Segoe UI", 10, "bold"))
-        frame_cli.pack(fill="x", pady=(0, 10))
-
-        search_f = tk.Frame(frame_cli, bg=self.bg_fundo)
-        search_f.pack(fill="x", padx=10, pady=5)
-
-        tk.Label(search_f, text="🔍 BUSCAR CLIENTE:", font=("Segoe UI", 9, "bold"), bg=self.bg_fundo).pack(side="left")
-        self.ent_busca_cli = tk.Entry(search_f, font=("Segoe UI", 10))
-        self.ent_busca_cli.pack(side="left", padx=10, fill="x", expand=True)
-        self.ent_busca_cli.bind("<KeyRelease>", lambda e: self.buscar_cliente_db())
-
-        self.tree_cli = ttk.Treeview(frame_cli, columns=("nome", "cpf", "tel"), show="headings", height=3, style="PDV.Treeview")
-        self.tree_cli.heading("nome", text="NOME")
-        self.tree_cli.heading("cpf", text="CPF")
-        self.tree_cli.heading("tel", text="TELEFONE")
-        self.tree_cli.pack(fill="x", padx=10, pady=5)
-        self.tree_cli.bind("<<TreeviewSelect>>", self.selecionar_cliente_busca)
-
-        self.lbl_dados_cli = tk.Label(frame_cli, text="Nenhum cliente selecionado", font=("Segoe UI", 10, "italic"),
-                                      bg=self.bg_fundo, fg=self.cor_destaque, anchor="w", padx=10)
-        self.lbl_dados_cli.pack(fill="x", pady=5)
-
-    def setup_sessao_produtos(self):
-        frame_prod = tk.LabelFrame(self.main_container, text=" Catálogo de Produtos (Duplo Clique para Adicionar) ", bg=self.bg_fundo, fg=self.cor_texto, font=("Segoe UI", 10, "bold"))
-        frame_prod.pack(fill="both", expand=True)
-
-        barra_busca = tk.Frame(frame_prod, bg=self.bg_fundo)
-        barra_busca.pack(fill="x", padx=10, pady=5)
-
-        tk.Label(barra_busca, text="👠 PRODUTO:", font=("Segoe UI", 9, "bold"), bg=self.bg_fundo).pack(side="left")
-        self.ent_busca_prod = tk.Entry(barra_busca, font=("Segoe UI", 10), width=30)
-        self.ent_busca_prod.pack(side="left", padx=5)
-        self.ent_busca_prod.bind("<KeyRelease>", lambda e: self.filtrar_produtos())
-
-        tk.Label(barra_busca, text="TAM:", font=("Segoe UI", 9, "bold"), bg=self.bg_fundo).pack(side="left", padx=(10,0))
-        self.ent_tam_filtro = tk.Entry(barra_busca, font=("Segoe UI", 10), width=5)
-        self.ent_tam_filtro.pack(side="left", padx=5)
-        self.ent_tam_filtro.bind("<KeyRelease>", lambda e: self.filtrar_produtos())
-
-        cols = ("sku", "produto", "cor", "tam", "preco", "estoque")
-        self.tree_estoque = ttk.Treeview(frame_prod, columns=cols, show="headings", height=8, style="PDV.Treeview")
-        for col in cols:
-            self.tree_estoque.heading(col, text=col.upper())
-            self.tree_estoque.column(col, width=100, anchor="center")
-        
-        self.tree_estoque.pack(fill="both", expand=True, padx=10, pady=5)
-        self.tree_estoque.bind("<Double-1>", self.adicionar_ao_carrinho)
-
-    def setup_sessao_carrinho(self):
-        frame_cart = tk.Frame(self.main_container, bg=self.bg_card, highlightthickness=1, highlightbackground=self.cor_borda)
-        frame_cart.pack(fill="x", pady=10)
-
-        self.tree_cart = ttk.Treeview(frame_cart, columns=("prod", "cor", "tam", "qtd", "sub"), show="headings", height=5, style="PDV.Treeview")
-        for col in ("prod", "cor", "tam", "qtd", "sub"):
-            self.tree_cart.heading(col, text=col.upper())
-            self.tree_cart.column(col, anchor="center")
-        self.tree_cart.pack(fill="x", side="left", expand=True, padx=5, pady=5)
-
-        self.lbl_total = tk.Label(frame_cart, text="TOTAL: R$ 0,00", font=("Segoe UI", 20, "bold"), 
-                                  bg=self.bg_card, fg=self.cor_destaque, padx=20)
-        self.lbl_total.pack(side="right")
-
-    # --- Lógica de Funções ---
-    def executar_comando_menu(self, comando, modo):
-        if comando: comando()
-        if modo:
-            self.modo_atual = modo
-            self.atualizar_destaque_menu()
-
-    def atualizar_destaque_menu(self):
-        for modo, botoes in self.botoes_menu.items():
-            for btn in botoes:
-                btn.config(bg=self.cor_destaque if modo == self.modo_atual else self.cor_btn_menu)
-
-    def buscar_cliente_db(self):
-        termo = self.ent_busca_cli.get()
-        self.tree_cli.delete(*self.tree_cli.get_children())
-        if len(termo) >= 2:
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT id, nome, cpf, telefone FROM clientes WHERE nome LIKE ? OR cpf LIKE ?", (f"%{termo}%", f"%{termo}%"))
-                for row in cursor.fetchall():
-                    self.tree_cli.insert("", "end", iid=row[0], values=(row[1], row[2], row[3]))
-
-    def selecionar_cliente_busca(self, event):
-        sel = self.tree_cli.selection()
-        if sel:
-            id_cli = sel[0]
-            valores = self.tree_cli.item(id_cli, "values")
-            self.cliente_atual = (id_cli, valores[0], valores[2]) # id, nome, tel
-            self.preencher_dados_cliente(self.cliente_atual)
-
-    def preencher_dados_cliente(self, dados):
-        info = f"✅ SELECIONADO: {dados[1]} | CONTATO: {dados[2]}"
-        self.lbl_dados_cli.config(text=info, font=("Segoe UI", 10, "bold"))
-
-    def listar_estoque_completo(self):
-        self.tree_estoque.delete(*self.tree_estoque.get_children())
-        for p in database.listar_itens():
-            # Ordem no database: id(0), produto(1), cor(2), tamanho(3), custo(4), venda(5), qtd(6)...
-            # Ajustado para o seu método listar_itens() que retorna: id, produto, cor, tamanho, precocusto, precovenda, quantidade...
-            self.tree_estoque.insert("", "end", iid=p[0], values=(p[0], p[1], p[2], p[3], f"R$ {p[5]:.2f}", p[6]))
-
-    def filtrar_produtos(self):
-        termo = self.ent_busca_prod.get().lower()
-        tam = self.ent_tam_filtro.get()
-        self.tree_estoque.delete(*self.tree_estoque.get_children())
-        for p in database.listar_itens():
-            match_nome = termo in p[1].lower() or termo in p[2].lower()
-            match_tam = tam == "" or str(p[3]) == tam
-            if match_nome and match_tam:
-                self.tree_estoque.insert("", "end", iid=p[0], values=(p[0], p[1], p[2], p[3], f"R$ {p[5]:.2f}", p[6]))
-
-    def adicionar_ao_carrinho(self, event):
-        sel = self.tree_estoque.selection()
-        if not sel: return
-        id_prod = sel[0]
-        item = self.tree_estoque.item(id_prod, "values")
-        
-        # Verificar se tem estoque
-        estoque_atual = int(item[5])
-        if estoque_atual <= 0:
-            messagebox.showwarning("Esgotado", "Este produto não possui estoque disponível!")
-            return
-
-        preco = float(item[4].replace("R$ ", "").replace(",", "."))
-        self.carrinho_itens.append({'id': id_prod, 'prod': item[1], 'cor': item[2], 'tam': item[3], 'preco': preco, 'qtd': 1})
-        self.atualizar_carrinho_view()
-
-    def remover_do_carrinho(self):
-        sel = self.tree_cart.selection()
-        if not sel: return
-        idx = self.tree_cart.index(sel[0])
-        del self.carrinho_itens[idx]
-        self.atualizar_carrinho_view()
-
-    def atualizar_carrinho_view(self):
-        self.tree_cart.delete(*self.tree_cart.get_children())
-        total = 0
-        for item in self.carrinho_itens:
-            self.tree_cart.insert("", "end", values=(item['prod'], item['cor'], item['tam'], item['qtd'], f"R$ {item['preco']:.2f}"))
-            total += item['preco'] * item['qtd']
-        self.lbl_total.config(text=f"TOTAL: R$ {total:.2f}")
-
-    def abrir_novo_cliente(self):
-        from cadastro_clientes import JanelaCadastroClientes
-        JanelaCadastroClientes(self)
-
-    def abrir_cadastro_produto(self):
-        from cadastro_produtos import JanelaCadastroProdutos
-        JanelaCadastroProdutos(self)
-
-    def finalizar_venda(self):
-        if not self.cliente_atual or not self.carrinho_itens:
-            messagebox.showerror("Erro", "Selecione um cliente e ao menos um produto!")
-            return
-        
-        # Aqui você chamaria a JanelaPagamento ou o método realizar_venda_segura direto
-        # Exemplo simplificado:
-        total = float(self.lbl_total.cget("text").replace("TOTAL: R$ ", ""))
-        
-        # Sugestão: Criar um popup de confirmação de pagamento simples ou chamar JanelaPagamento
-        res, msg = database.realizar_venda_segura(
-            cliente_id=self.cliente_atual[0],
-            lista_produtos=self.carrinho_itens,
-            forma_pgto="Dinheiro", # Isso viria de um seletor
-            parcelas=1
-        )
-        
-        if res:
-            messagebox.showinfo("Sucesso", msg)
-            self.destroy()
-        else:
-            messagebox.showerror("Erro", msg)
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = JanelaCadastroVendas(root)
-    root.mainloop()
-
-
-
-    #main Vs3
-
-    import tkinter as tk
-from tkinter import messagebox, ttk
-import database 
-from datetime import datetime
-import ui_utils
-
-class SistemaAleSapatilhas:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Alê Sapatilhas - Gestão Integrada")
-        
-        # --- Aplicar dimensões maximizadas ---
-        ui_utils.calcular_dimensoes_janela(self.root, maximizar=True)
+            # --- Validação de estoque: verifica se cada item da lista possui saldo suficiente antes de prosseguir ---
+            for item in lista_produtos:
+                cursor.execute("SELECT quantidade, produto FROM produtos WHERE id = ?", (item['id'],))
+                res = cursor.fetchone()
+                if not res or res[0] < item['qtd']:
+                    return False, f"Estoque insuficiente: {res[1] if res else 'Produto não encontrado'}"
            
-        # --- Paleta de cores (Padronizada) ---
-        paleta = ui_utils.get_paleta()
-        self.bg_fundo       = paleta["bg_fundo"]
-        self.bg_card        = paleta["bg_card"]
-        self.cor_borda      = paleta["cor_borda"]
-        self.cor_texto      = paleta["cor_texto"]
-        self.cor_lbl        = paleta["cor_lbl"]
-        self.cor_destaque   = paleta["cor_destaque"]
-        self.cor_btn_menu   = paleta["cor_btn_menu"]
-        self.cor_btn_sair   = paleta["cor_btn_sair"]
-        self.cor_btn_acao   = paleta["cor_btn_acao"]
-        self.cor_hover_btn  = paleta["cor_hover_btn"]
+            total_bruto = sum(p['qtd'] * p['preco'] for p in lista_produtos)
+            total_liquido = round(total_bruto - desconto_total, 2)
+            
+            # Registro da Venda
+            cursor.execute("""INSERT INTO vendas (cliente_id, valor_bruto, desconto, valor_total, forma_pagamento, qtd_parcelas)
+                              VALUES (?, ?, ?, ?, ?, ?)""", (cliente_id, total_bruto, desconto_total, total_liquido, forma_pgto, parcelas))
+            venda_id = cursor.lastrowid
 
-        self.root.configure(bg=self.bg_fundo)
-        self.modo_atual = "clientes" 
-        self.botoes_menu = {}  # Dicionário para armazenar referências dos botões do menu
-        
-        self.setup_ui()
-        self.exibir_clientes() # Inicia visualizando clientes
+            # --- Processamento de itens e estoque: registra cada produto vendido e subtrai a quantidade do inventário ---
+            for p in lista_produtos:
+                cursor.execute("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?", (p['qtd'], p['id']))
+                cursor.execute("INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal) VALUES (?, ?, ?, ?, ?)",
+                               (venda_id, p['id'], p['qtd'], p['preco'], p['qtd'] * p['preco']))
 
-    def formatar_data_exibicao(self, data_str):
-        if data_str:
+            # Lançamento das Parcelas Recorrentes
+            valor_parcela = round(total_liquido / parcelas, 2)
+            for i in range(parcelas):
+                if i == parcelas - 1: # Ajuste de centavos na última parcela
+                    valor_parcela = round(total_liquido - (valor_parcela * (parcelas - 1)), 2)
+                
+                vencimento = adicionar_meses(datetime.now(), i).strftime("%Y-%m-%d")
+                
+                cursor.execute("""
+                    INSERT INTO financeiro (
+                        tipo, venda_id, id_agrupador, entidade_nome, descricao, valor, valor_base, 
+                        parcela_atual, total_parcelas, data_vencimento, categoria, recorrencia
+                    ) VALUES ('Receita', ?, ?, (SELECT nome FROM clientes WHERE id=?), ?, ?, ?, ?, ?, ?, 'Venda', 'Parcelado')
+                """, (venda_id, venda_id, cliente_id, f"Venda #{venda_id} - Parcela {i+1}/{parcelas}", 
+                      valor_parcela, valor_parcela, i+1, parcelas, vencimento))
+
+            conn.commit()
+            return True, "Venda finalizada com sucesso!"
+        except Exception as e:
+            conn.rollback()
+            return False, f"Erro ao processar venda: {str(e)}"
+
+# --- Financeiro e relatórios ---
+def quitar_titulo_financeiro(financeiro_id, forma_pgto):
+    # --- Registra o pagamento de uma conta a pagar ou receber alterando seu status e salvando a data da liquidação ---
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE financeiro SET status = 'Pago', data_pagamento = ?, forma_pagamento = ? WHERE id = ?", 
+                       (hoje, forma_pgto, financeiro_id))
+
+def lancar_despesa(descricao, valor, categoria, vencimento, parcelas=1):
+    # --- Cria lançamentos de saída financeira no sistema, permitindo o rateio de valores em várias parcelas mensais ---
+    def normalizar_data(data_str):
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
             try:
-                return datetime.strptime(data_str, "%Y-%m-%d").strftime("%d/%m/%Y")
+                return datetime.strptime(data_str, fmt)
             except ValueError:
-                return data_str
-        return ""
-
-    def setup_ui(self):
-        # Sidebar
-        self.sidebar = tk.Frame(self.root, bg=self.cor_btn_sair, width=220)
-        self.sidebar.pack(side="left", fill="y")
-        self.sidebar.pack_propagate(False)
-
-        tk.Label(self.sidebar, text="ALÊ\nSAPATILHAS", font=("Segoe UI", 18, "bold"), 
-                 bg=self.cor_btn_sair, fg="white", pady=20).pack()
-
-        btn_estilo = {
-            "font": ("Segoe UI", 10, "bold"), "bg": self.cor_btn_menu, "fg": "white",
-            "relief": "flat", "activebackground": self.cor_hover_btn, 
-            "activeforeground": "white", "cursor": "hand2", "anchor": "w", "padx": 20
-        }
-
-        botoes = [
-            ("➕ LANÇAR VENDA", self.abrir_cadastro_vendas, "vendas"),
-            ("📑 LISTAR VENDAS", self.exibir_vendas, "vendas"),
-            ("💸 LANÇAR DESPESAS", self.abrir_cadastro_despesas, "financeiro"), 
-            ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
-            ("👤 CADASTRAR CLIENTE", self.abrir_cadastro_cliente, "clientes"),
-            ("👥 LISTAR CLIENTES", self.exibir_clientes, "clientes"),
-            ("📦 CADASTRAR PRODUTO", self.abrir_cadastro_produto, "produtos"),
-            ("👠 LISTAR PRODUTOS", self.exibir_produtos, "produtos"),
-            ("📊 DASHBOARD", self.exibir_dashboard, "dashboard"),
-            ("🔄 ATUALIZAR", self.atualizar_lista, None),
-            ("", None, None), 
-            ("🚪 SAIR", self.confirmar_saida, None)
-        ]
-
-        for texto, comando, modo in botoes:
-            if texto == "":
-                tk.Label(self.sidebar, bg=self.cor_btn_sair, pady=10).pack()
                 continue
+        raise ValueError(f"Formato de data inválido: {data_str}")
 
-            # --- Criando botões com estilo e hover ---
-            btn = tk.Button(self.sidebar, text=texto, command=lambda c=comando, m=modo: self.executar_comando_menu(c, m), **btn_estilo)
-            btn.pack(fill="x", pady=2)
-            # Hover removido conforme solicitação para retornar à configuração anterior
-            # btn.bind("<Enter>", lambda e, b=btn: b.config(bg=self.cor_hover_btn))
-            # btn.bind("<Leave>", lambda e, b=btn: b.config(bg=self.cor_btn_menu))
-            
-            # Armazenar referência se tem modo associado
-            if modo:
-                self.botoes_menu.setdefault(modo, []).append(btn)
-
-        # --- Container Principal para exibir conteúdo dinâmico ---
-        self.container = tk.Frame(self.root, bg=self.bg_fundo, padx=20, pady=20)
-        self.container.pack(side="right", fill="both", expand=True)
-
-        # --- Barra de busca rápida ---
-        search_frame = tk.Frame(self.container, bg=self.bg_fundo)
-        search_frame.pack(fill="x", pady=(0, 10))
-        tk.Label(search_frame, text="🔍 BUSCA RÁPIDA", font=("Segoe UI", 10, "bold"), bg=self.bg_fundo).pack(side="left")
-        self.ent_busca = tk.Entry(search_frame, font=("Segoe UI", 10), bg=self.bg_card, relief="flat", 
-                                  highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_busca.pack(side="left", padx=10, fill="x", expand=True, ipady=4)
-        self.ent_busca.bind("<KeyRelease>", lambda e: self.filtrar_busca())
-
-        self.lbl_titulo = tk.Label(self.container, text="Lista", font=("Segoe UI", 18, "bold"), 
-                                   bg=self.bg_fundo, fg=self.cor_texto)
-        self.lbl_titulo.pack(anchor="w", pady=(0, 10))
-
-        # --- Tabela (Treeview) ---
-        self.style = ttk.Style()
-        self.style.theme_use("clam")
-        self.style.configure("Treeview", background=self.bg_card, foreground=self.cor_texto, rowheight=35, borderwidth=0, font=("Segoe UI", 10))
-        self.style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"), background=self.bg_card)
-        self.style.map("Treeview", background=[('selected', self.cor_destaque)])
-        
-        self.tree_frame = tk.Frame(self.container, bg=self.bg_card)
-        self.tree_frame.pack(fill="both", expand=True)
-
-        self.tree = ttk.Treeview(self.tree_frame, show="headings", selectmode="browse")
-        self.tree.pack(side="left", fill="both", expand=True)
-
-        # --- Bindings de interação ---
-        self.tree.bind("<Double-1>", lambda e: self.editar_selecionado())
-        self.tree.bind("<Button-3>", self.mostrar_menu_contexto)
-        self.tree.bind("<Motion>", self.focus_linha_mouse)  # Focus ao passar mouse
-        
-        # Focus no campo de busca
-        self.ent_busca.bind("<Enter>", lambda e: self.ent_busca.focus())
-        
-        # Atualizar destaque do menu
-        self.atualizar_destaque_menu()
-
-    def executar_comando_menu(self, comando, modo):
-        """Executa comando do menu e atualiza destaque"""
-        if comando:
-            comando()
-        if modo:
-            self.modo_atual = modo
-            self.atualizar_destaque_menu()
-
-    def atualizar_destaque_menu(self):
-        """Atualiza destaque visual do botão do menu ativo"""
-        for modo, botoes in self.botoes_menu.items():
-            for btn in botoes:
-                if modo == self.modo_atual:
-                    btn.config(bg=self.cor_destaque, fg="white")
-                else:
-                    btn.config(bg=self.cor_btn_menu, fg="white")
-
-    def confirmar_acao_menu(self, titulo, func, mensagem=None):
-        """Mostra confirmação antes de executar uma ação de menu de contexto."""
-        if not func:
-            return
-        mensagem = mensagem or f"Deseja realmente {titulo.lower()}?"
-        if messagebox.askyesno(titulo, mensagem, parent=self.root):
-            func()
-
-    def focus_linha_mouse(self, event):
-        """Define foco na linha onde o mouse está passando"""
-        item = self.tree.identify_row(event.y)
-        if item:
-            self.tree.focus(item)
-            self.tree.selection_set(item)
-        
-    # --- Função para preparar colunas da Treeview de acordo com o modo atual ---
-    def preparar_colunas(self, colunas):
-        self.tree.delete(*self.tree.get_children())
-        self.tree["columns"] = colunas
-        for col in colunas:
-            self.tree.heading(col, text=col.upper())
-            self.tree.column(col, anchor="center", width=120)
-
-    # --- Funções de carregamento ---
-    def exibir_clientes(self):
-        self.modo_atual = "clientes"
-        self.lbl_titulo.config(text="👥 CADASTRO DE CLIENTES")
-        self.preparar_colunas(("nome", "cpf", "telefone", "aniversario", "calcado", "limite", "status"))    
-        for c in database.exibir_clientes():
-            # c[1]=nome, c[2]=cpf, c[3]=telefone, c[5]=aniversario, c[6]=calcado, c[12]=limite, c[14]=status
-            self.tree.insert("", "end", iid=c[0], values=(c[1], c[2], c[3], self.formatar_data_exibicao(c[5]), c[6], f"R$ {c[12]:.2f}", c[14]))
-
-    def exibir_produtos(self):
-        self.modo_atual = "produtos"
-        self.lbl_titulo.config(text="👠 ESTOQUE DE PRODUTOS")
-        # Ajustado para bater com a ordem do database.exibir_produtos()
-        self.preparar_colunas(("sku", "produto", "cor", "tamanho", "estoque", "preço", "fornecedor", "status"))
-        for i in database.exibir_produtos():
-            # i[1]=sku, i[2]=produto, i[3]=cor, i[4]=tamanho, i[7]=quantidade, i[6]=precovenda, i[10]=fornecedor, i[11]=status_item
-            self.tree.insert("", "end", iid=i[0], values=(i[1], i[2], i[3], i[4], i[7], f"R$ {i[6]:.2f}", i[10], i[11]))
-
-    def exibir_vendas(self):
-        self.modo_atual = "vendas"
-        self.lbl_titulo.config(text="📑 HISTÓRICO DE VENDAS")
-        self.preparar_colunas(("cliente", "total", "forma", "data", "status"))
-        for v in database.relatorio_vendas_geral():
-            self.tree.insert("", "end", iid=v[0], values=(v[1], f"R$ {v[2]:.2f}", v[3], self.formatar_data_exibicao(v[5]), v[7]))
-
-    def exibir_financeiro(self):
-        self.modo_atual = "financeiro"
-        self.lbl_titulo.config(text="💸 FLUXO DE CAIXA")
-        self.preparar_colunas(("tipo", "Fornecedor", "descrição", "valor", "vencimento", "pagamento", "forma", "categoria", "recorrencia", "status"))
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, tipo, entidade_nome, descricao, valor, data_vencimento, data_pagamento, forma_pagamento, categoria, recorrencia, status FROM financeiro ORDER BY data_vencimento ASC")
-            for f in cursor.fetchall():
-                # Aplicar tag "cancelado" se status for "Cancelado"
-                tag = ("cancelado",) if f[10] == "Cancelado" else ()
-                self.tree.insert("", "end", iid=f[0], values=(f[1], f[2], f[3], f"R$ {f[4]:.2f}", self.formatar_data_exibicao(f[5]), self.formatar_data_exibicao(f[6]), f[7], f[8], f[9], f[10]), tags=tag)
-
-    def exibir_dashboard(self):
-        res = database.dashboard_resumo()
-        msg = f"📊 STATUS DA LOJA\n{'-'*30}\n"
-        msg += f"Contas a Receber: R$ {res['total_a_receber']:.2f}\n"
-        if res['alertas_estoque']:
-            msg += f"\n🚨 ALERTAS DE ESTOQUE:\n"
-            for item in res['alertas_estoque']: msg += f"- {item[0]}: {item[1]} un.\n"
-        else: msg += "\n✅ Estoque em dia!"
-        messagebox.showinfo("Dashboard Pro", msg)
-
-    # --- Janelas (Imports Lazy para evitar erros de circularidade) ---
-    def abrir_cadastro_vendas(self):
-        selection = self.tree.selection()
-        cliente_selecionado = None
-        
-        if self.modo_atual == "clientes" and selection:
-            item_id = selection[0]
-            valores = self.tree.item(item_id, "values")
-            cliente_selecionado = (item_id, valores[0], valores[2])  # (id, nome, telefone)
-        
-        from cadastro_vendas import JanelaCadastroVendas
-        JanelaCadastroVendas(self.root, cliente_selecionado)
-        self.exibir_vendas()
-
-    def abrir_cadastro_despesas(self):
-        from cadastro_despesas import JanelaCadastroDespesas
-        JanelaCadastroDespesas(self.root)
-        self.exibir_financeiro()
-
-    def abrir_cadastro_cliente(self):
-        from cadastro_clientes import JanelaCadastroClientes
-        JanelaCadastroClientes(self.root)
-        self.exibir_clientes()
-
-    def abrir_cadastro_produto(self):
-        from cadastro_produtos import JanelaCadastroProdutos
-        JanelaCadastroProdutos(self.root)
-        self.exibir_produtos()
-
-    def editar_selecionado(self):
-        item_id = self.tree.selection()
-        if not item_id: return
-        id_banco = item_id[0]
-
-        if self.modo_atual == "clientes":
-            from cadastro_clientes import JanelaCadastroClientes
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM clientes WHERE id = ?", (id_banco,))
-                dados = cursor.fetchone()
-                if dados: 
-                    JanelaCadastroClientes(self.root, dados_cliente=dados)
-                    self.exibir_clientes()
-
-        elif self.modo_atual == "produtos":
-            from cadastro_produtos import JanelaCadastroProdutos
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_banco,))
-                dados = cursor.fetchone()
-                if dados: 
-                    JanelaCadastroProdutos(self.root, dados_produto=dados)
-                    self.exibir_produtos()
-
-        elif self.modo_atual == "financeiro":
-            self.editar_financeiro_registro() 
-
-        elif self.modo_atual == "vendas":
-            self.editar_venda() 
-
-    def editar_financeiro_registro(self):
-        item = self.tree.selection()
-        if not item: return
-        registro_id = item[0]
-
-        from cadastro_despesas import JanelaCadastroDespesas
-        from cadastro_vendas import JanelaCadastroVendas
-
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT tipo, venda_id FROM financeiro WHERE id = ?", (registro_id,))
-            result = cursor.fetchone()
-            
-            if not result: return
-
-            tipo, venda_id = result
-            
-            if tipo == "Despesa":
-                from cadastro_despesas import JanelaCadastroDespesas
-                cursor.execute("SELECT * FROM financeiro WHERE id = ?", (registro_id,))
-                dados = cursor.fetchone()
-                if dados:
-                    JanelaCadastroDespesas(self.root, dados_despesa=dados)
-                    self.exibir_financeiro()
-            
-            elif tipo == "Receita":
-                from cadastro_vendas import JanelaCadastroVendas
-                if venda_id:
-                    # Se for receita vinda de venda, abrimos a edição da venda
-                    cursor.execute("""
-                        SELECT v.id, c.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
-                        FROM vendas v
-                        JOIN clientes c ON v.cliente_id = c.id
-                        WHERE v.id = ?
-                    """, (venda_id,))
-                    dados = cursor.fetchone()
-                    if dados:
-                        dados_venda = {
-                            'id': dados[0], 'cliente': f"{dados[2]} - {dados[3]}",
-                            'total': dados[4], 'forma': dados[5], 'parcelas': dados[6],
-                            'desconto': dados[7], 'data': dados[8]
-                        }
-                        JanelaCadastroVendas(self.root, cliente_selecionado=(dados[1], dados[2], dados[3]), dados_venda=dados_venda)
-                        self.exibir_vendas()
-
-    # --- Função para mostrar menu de contexto ---
-    def mostrar_menu_contexto(self, event):
-        item = self.tree.identify_row(event.y)
-        if item:
-            self.tree.selection_set(item)
-            menu = tk.Menu(self.root, tearoff=0)
-            
-            if self.modo_atual == "clientes":
-                menu.add_command(label="Editar Cliente", command=self.editar_selecionado)
-                menu.add_command(label="Visualizar Cliente", command=self.visualizar_cliente)
-                menu.add_separator()
-                menu.add_command(label="✓ Ativo", command=lambda: self._mudar_status_cliente("Ativo"))
-                menu.add_command(label="★ VIP", command=lambda: self._mudar_status_cliente("Vip"))
-                menu.add_command(label="⛔ Bloqueado", command=lambda: self._mudar_status_cliente("Bloqueado"))
-                menu.add_command(label="✗ Inativo", command=lambda: self._mudar_status_cliente("Inativo"))
-                menu.add_separator()
-                menu.add_command(label="🔄 Restaurar Status", command=self.restaurar_cliente)
-                menu.add_separator()
-                menu.add_command(label="Sair", command=lambda: None)
-                
-            elif self.modo_atual == "produtos":
-                menu.add_command(label="Editar Item", command=self.editar_selecionado)
-                menu.add_command(label="Visualizar Item", command=self.visualizar_item)
-                menu.add_separator()
-                menu.add_command(label="✓ Disponível", command=lambda: self._mudar_status_produto("Disponível"))
-                menu.add_command(label="✗ Indisponível", command=lambda: self._mudar_status_produto("Indisponível"))
-                menu.add_command(label="⊘ Esgotado", command=lambda: self._mudar_status_produto("Esgotado"))
-                menu.add_command(label="⭐ Promocional", command=lambda: self._mudar_status_produto("Promocional"))
-                menu.add_separator()
-                menu.add_command(label="🔄 Restaurar Status", command=self.restaurar_produto)
-                menu.add_separator()
-                menu.add_command(label="Sair", command=lambda: None)
-                
-            elif self.modo_atual == "financeiro":
-                # Verificar o tipo do registro selecionado
-                item_id = self.tree.selection()
-                tipo_registro = "Despesa"  # padrão
-                if item_id:
-                    valores = self.tree.item(item_id[0], "values")
-                    if valores and len(valores) > 0:
-                        tipo_registro = valores[0]  # primeira coluna é "tipo"
-                
-                visualizar_label = f"Visualizar {tipo_registro}"
-                
-                menu.add_command(label="Editar", command=self.editar_despesa)
-                menu.add_command(label=visualizar_label, command=self.visualizar_despesa)
-                menu.add_separator()
-                menu.add_command(label="◎ Pendente", command=lambda: self._mudar_status_despesa("Pendente"))
-                menu.add_command(label="✓ Pago", command=lambda: self._mudar_status_despesa("Pago"))
-                menu.add_command(label="⚠ Atrasado", command=lambda: self._mudar_status_despesa("Atrasado"))
-                menu.add_command(label="✗ Cancelado", command=lambda: self._mudar_status_despesa("Cancelado"))
-                menu.add_separator()
-                menu.add_command(label="🔄 Restaurar Status", command=self.restaurar_despesa)
-                menu.add_separator()
-                menu.add_command(label="Sair", command=lambda: None)
-                
-            elif self.modo_atual == "vendas":
-                menu.add_command(label="Editar Venda", command=self.editar_venda)
-                menu.add_command(label="Visualizar Venda", command=self.visualizar_venda)
-                menu.add_separator()
-                menu.add_command(label="✓ Finalizada", command=lambda: self._mudar_status_venda("Finalizada"))
-                menu.add_command(label="⏳ Pendente", command=lambda: self._mudar_status_venda("Pendente"))
-                menu.add_command(label="✗ Cancelada", command=lambda: self._mudar_status_venda("Cancelada"))
-                menu.add_separator()
-                menu.add_command(label="🔄 Restaurar Status", command=self.restaurar_venda)
-                menu.add_separator()
-                menu.add_command(label="Sair", command=lambda: None)
-                
-            menu.post(event.x_root, event.y_root)
-
-    def excluir_logico(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        if messagebox.askyesno("Confirmar", "Deseja realmente desativar este registro?", parent=self.root):
-            if self.modo_atual == "clientes":
-                database.atualizar_cliente(id_banco, status_cliente='Inativo')
-                self.exibir_clientes()
-            elif self.modo_atual == "produtos":
-                database.atualizar_produto(id_banco, status_item='Indisponível')
-                self.exibir_produtos()
-
-    def quitar_selecionado(self):
-        item = self.tree.selection()
-        if not item: return
-        if not messagebox.askyesno("Confirmar", "Deseja quitar este lançamento financeiro?", parent=self.root):
-            return
-        id_banco = item[0]
-        database.quitar_titulo_financeiro(id_banco, "Dinheiro")
-        self.exibir_financeiro()
-
-    def filtrar_busca(self):
-        termo = self.ent_busca.get().lower()
-        # Primeiro, torna todas as linhas visíveis novamente (reattach)
-        for item in self.tree.get_children():
-            self.tree.reattach(item, '', 'end')
-            
-        # Agora oculta (detach) as que não batem com o termo
-        if termo != "":
-            for item in self.tree.get_children():
-                valores = self.tree.item(item)['values']
-                if not any(termo in str(v).lower() for v in valores):
-                    self.tree.detach(item)
-
-    # --- Funções do menu de contexto ---
-    def bloquear_cliente(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        if messagebox.askyesno("Confirmar", "Deseja bloquear este cliente?", parent=self.root):
-            database.atualizar_cliente(id_banco, status_cliente='Bloqueado')
-            self.exibir_clientes()
-
-    def restaurar_cliente(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        # Buscar status atual
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status_cliente FROM clientes WHERE id=?", (id_banco,))
-            status_atual = cursor.fetchone()[0]
-        
-        # Definir status anterior
-        if status_atual == "Bloqueado":
-            novo_status = "Ativo"
-        elif status_atual == "Inativo":
-            novo_status = "Ativo"
-        else:
-            messagebox.showinfo("Info", "Cliente já está ativo.", parent=self.root)
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Restaurar cliente para '{novo_status}'?", parent=self.root):
-            database.atualizar_cliente(id_banco, status_cliente=novo_status)
-            self.exibir_clientes()
-
-    def visualizar_cliente(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito, status_cliente FROM clientes WHERE id = ?", (id_banco,))
-            dados = cursor.fetchone()
-        if not dados:
-            messagebox.showerror("Erro", "Cliente não encontrado.", parent=self.root)
-            return
-        
-        janela = tk.Toplevel(self.root)
-        janela.title("Visualizar Cliente")
-        janela.configure(bg=self.bg_fundo)
-        janela.transient(self.root)
-        janela.grab_set()
-        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=560, altura_desejada=620)
-        
-        info_text = f"""
-Nome: {dados[0]}
-CPF: {dados[1] or 'N/A'}
-Telefone: {dados[2]}
-Email: {dados[3] or 'N/A'}
-Aniversário: {dados[4] or 'N/A'}
-Tamanho Calçado: {dados[5] or 'N/A'}
-Endereço: {dados[6] or 'N/A'}
-Bairro: {dados[7] or 'N/A'}
-Cidade: {dados[8] or 'N/A'}
-CEP: {dados[9] or 'N/A'}
-Observação: {dados[10] or 'N/A'}
-Limite de Crédito: R$ {dados[11]:.2f}
-Status: {dados[12]}
-        """
-        frame = tk.Frame(janela, bg=self.bg_fundo, padx=20, pady=20)
-        frame.pack(fill="both", expand=True)
-        tk.Label(frame, text="👤 VISUALIZAR CLIENTE", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
-        tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 10), justify="left", relief="solid", borderwidth=1, padx=10, pady=10).pack(fill="both", expand=True)
-        tk.Button(frame, text="FECHAR", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
-
-    def indisponibilizar_produto(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        if messagebox.askyesno("Confirmar", "Deseja indisponibilizar este produto?", parent=self.root):
-            database.atualizar_produto(id_banco, status_item='Indisponível')
-            self.exibir_produtos()
-
-    def restaurar_produto(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        # Buscar status atual
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status_item FROM produtos WHERE id=?", (id_banco,))
-            status_atual = cursor.fetchone()[0]
-        
-        # Definir status anterior
-        if status_atual == "Indisponível":
-            novo_status = "Disponível"
-        elif status_atual == "Esgotado":
-            novo_status = "Disponível"
-        else:
-            messagebox.showinfo("Info", "Produto já está disponível.", parent=self.root)
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Restaurar produto para '{novo_status}'?", parent=self.root):
-            database.atualizar_produto(id_banco, status_item=novo_status)
-            self.exibir_produtos()
-
-    def _mudar_status_cliente(self, novo_status):
-        """Altera o status de um cliente"""
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status_cliente FROM clientes WHERE id=?", (id_banco,))
-            status_atual = cursor.fetchone()[0]
-        
-        if status_atual == novo_status:
-            messagebox.showinfo("Info", f"Cliente já está com status '{novo_status}'.", parent=self.root)
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
-            database.atualizar_cliente(id_banco, status_cliente=novo_status)
-            self.exibir_clientes()
-
-    def _mudar_status_produto(self, novo_status):
-        """Altera o status de um produto"""
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status_item FROM produtos WHERE id=?", (id_banco,))
-            status_atual = cursor.fetchone()[0]
-        
-        if status_atual == novo_status:
-            messagebox.showinfo("Info", f"Produto já está com status '{novo_status}'.", parent=self.root)
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
-            database.atualizar_produto(id_banco, status_item=novo_status)
-            self.exibir_produtos()
-
-    def _mudar_status_despesa(self, novo_status):
-        """Altera o status de uma despesa/receita com gerenciamento de data_pagamento"""
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status, data_pagamento FROM financeiro WHERE id=?", (id_banco,))
-            result = cursor.fetchone()
-            if not result:
-                messagebox.showerror("Erro", "Registro não encontrado.", parent=self.root)
-                return
-            status_atual, data_pagamento_atual = result
-        
-        if status_atual == novo_status:
-            messagebox.showinfo("Info", f"Registro já está com status '{novo_status}'.", parent=self.root)
-            return
-        
-        # Determinar valor de data_pagamento baseado no novo status
-        data_pagamento = None
-        if novo_status == "Pago":
-            data_pagamento = datetime.now().strftime("%Y-%m-%d")
-        elif novo_status in ["Pendente", "Atrasado"]:
-            data_pagamento = None  # Limpar data de pagamento
-        elif novo_status == "Cancelado":
-            data_pagamento = None  # Limpar data de pagamento
-        
-        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                if data_pagamento:
-                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = ? WHERE id = ?", (novo_status, data_pagamento, id_banco))
-                else:
-                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = NULL WHERE id = ?", (novo_status, id_banco))
-                conn.commit()
-            self.exibir_financeiro()
-
-    def _mudar_status_venda(self, novo_status):
-        """Altera o status de uma venda"""
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status FROM vendas WHERE id=?", (id_banco,))
-            result = cursor.fetchone()
-            if not result:
-                messagebox.showerror("Erro", "Venda não encontrada.", parent=self.root)
-                return
-            status_atual = result[0]
-        
-        if status_atual == novo_status:
-            messagebox.showinfo("Info", f"Venda já está com status '{novo_status}'.", parent=self.root)
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                cursor.execute("UPDATE vendas SET status = ? WHERE id = ?", (novo_status, id_banco))
-                conn.commit()
-            self.exibir_vendas()
-
-    def atualizar_lista(self):
-        if self.modo_atual == "clientes":
-            self.exibir_clientes()
-        elif self.modo_atual == "produtos":
-            self.exibir_produtos()
-        elif self.modo_atual == "financeiro":
-            self.exibir_financeiro()
-        elif self.modo_atual == "vendas":
-            self.exibir_vendas()
-        elif self.modo_atual == "dashboard":
-            self.exibir_dashboard()
-
-    def editar_despesa(self):
-        item = self.tree.selection()
-        if not item: return
-        if not messagebox.askyesno("Confirmar", "Deseja editar este lançamento financeiro?", parent=self.root):
-            return
-        id_banco = item[0]
-        
-        from cadastro_despesas import JanelaCadastroDespesas
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM financeiro WHERE id=?", (id_banco,))
-            dados = cursor.fetchone()
-            if dados:
-                JanelaCadastroDespesas(self.root, dados_despesa=dados)
-                self.exibir_financeiro()
-
-    def visualizar_despesa(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT tipo, entidade_nome, descricao, valor, parcela_atual, total_parcelas, data_vencimento, data_pagamento, forma_pagamento, categoria, status, recorrencia FROM financeiro WHERE id = ?", (id_banco,))
-            dados = cursor.fetchone()
-
-        if not dados:
-            messagebox.showerror("Erro", "Registro financeiro não encontrado.", parent=self.root)
-            return
-
-        tipo, entidade_nome, descricao, valor, parcela_atual, total_parcelas, data_vencimento, data_pagamento, forma_pagamento, categoria, status, recorrencia = dados
-        
-        # Determinar se é receita ou despesa para ajustar labels
-        if tipo == "Receita":
-            titulo = "💰 VISUALIZAR RECEITA"
-            entidade_label = "Cliente"
-        else:
-            titulo = "💰 VISUALIZAR DESPESA"
-            entidade_label = "Fornecedor"
-
-        janela = tk.Toplevel(self.root)
-        janela.title(f"Visualizar {tipo}")
-        janela.configure(bg=self.bg_fundo)
-        janela.transient(self.root)
-        janela.grab_set()
-        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=560, altura_desejada=620)
-
-        frame = tk.Frame(janela, bg=self.bg_fundo, padx=20, pady=20)
-        frame.pack(fill="both", expand=True)
-
-        info_text = f"""
-{entidade_label}: {entidade_nome}
-Descrição: {descricao}
-Valor: R$ {valor:.2f}
-Parcela: {parcela_atual} de {total_parcelas}
-Vencimento: {datetime.strptime(data_vencimento, '%Y-%m-%d').strftime('%d/%m/%Y') if data_vencimento else 'N/A'}
-Data de Pagamento: {datetime.strptime(data_pagamento, '%Y-%m-%d').strftime('%d/%m/%Y') if data_pagamento else 'N/A'}
-Forma de Pagamento: {forma_pagamento or 'N/A'}
-Categoria: {categoria or 'N/A'}
-Status: {status}
-Recorrência: {recorrencia or 'Não Recorrente'}
-        """
-
-        tk.Label(frame, text=titulo, bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
-        tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 10), justify="left", relief="solid", borderwidth=1, padx=10, pady=10).pack(fill="both", expand=True)
-        tk.Button(frame, text="FECHAR", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
-
-    def restaurar_despesa(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        # Buscar status atual e data de pagamento
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status, data_pagamento FROM financeiro WHERE id=?", (id_banco,))
-            result = cursor.fetchone()
-            if not result:
-                messagebox.showerror("Erro", "Registro não encontrado.", parent=self.root)
-                return
-            status_atual, data_pagamento_atual = result
-        
-        # Definir status anterior e data anterior
-        novo_status = None
-        nova_data_pagamento = None
-        
-        if status_atual == "Pago":
-            novo_status = "Pendente"
-            nova_data_pagamento = None  # Remover data de pagamento
-        elif status_atual == "Cancelado":
-            novo_status = "Pendente"
-            nova_data_pagamento = None
-        elif status_atual == "Atrasado":
-            novo_status = "Pendente"
-            nova_data_pagamento = None
-        else:
-            messagebox.showinfo("Info", "Registro já está pendente.", parent=self.root)
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Restaurar registro para '{novo_status}'?", parent=self.root):
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                if nova_data_pagamento:
-                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = ? WHERE id = ?", (novo_status, nova_data_pagamento, id_banco))
-                else:
-                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = NULL WHERE id = ?", (novo_status, id_banco))
-                conn.commit()
-            self.exibir_financeiro()
-
-    def restaurar_venda(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        # Buscar status atual
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status FROM vendas WHERE id=?", (id_banco,))
-            result = cursor.fetchone()
-            if not result:
-                messagebox.showerror("Erro", "Venda não encontrada.", parent=self.root)
-                return
-            status_atual = result[0]
-        
-        # Definir status anterior
-        if status_atual == "Cancelada":
-            novo_status = "Finalizada"
-        elif status_atual == "Pendente":
-            novo_status = "Finalizada"
-        else:
-            messagebox.showinfo("Info", "Venda já está finalizada.", parent=self.root)
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Restaurar venda para '{novo_status}'?", parent=self.root):
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                cursor.execute("UPDATE vendas SET status = ? WHERE id = ?", (novo_status, id_banco))
-                conn.commit()
-            self.exibir_vendas()
-
-    def editar_venda(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        from cadastro_vendas import JanelaCadastroVendas
-        with database.conectar() as conn:
-            cursor = conn.cursor()
+    data_inicial = normalizar_data(vencimento)
+    with conectar() as conn:
+        cursor = conn.cursor()
+        valor_parc = round(valor / parcelas, 2)
+        for i in range(parcelas):
+            data_venc = adicionar_meses(data_inicial, i).strftime("%Y-%m-%d")
             cursor.execute("""
-                SELECT v.id, c.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
-                FROM vendas v
-                JOIN clientes c ON v.cliente_id = c.id
-                WHERE v.id = ?
-            """, (id_banco,))
-            dados = cursor.fetchone()
-            if dados:
-                dados_venda = {
-                    'id': dados[0],
-                    'cliente': f"{dados[2]} - {dados[3]}",
-                    'total': dados[4],
-                    'forma': dados[5],
-                    'parcelas': dados[6],
-                    'desconto': dados[7],
-                    'data': dados[8]
-                }
-                # Correção: passando os dados corretamente para a JanelaCadastroVendas
-                JanelaCadastroVendas(self.root, cliente_selecionado=(dados[1], dados[2], dados[3]), dados_venda=dados_venda)
-                self.exibir_vendas()
+                INSERT INTO financeiro (tipo, descricao, valor, parcela_atual, total_parcelas, data_vencimento, categoria, status)
+                VALUES ('Despesa', ?, ?, ?, ?, ?, ?, 'Pendente')
+            """, (descricao, valor_parc, i+1, parcelas, data_venc, categoria))
+        conn.commit()
 
-    def visualizar_venda(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        from cadastro_despesas import VisualizarRecibo
-        VisualizarRecibo(self.root, id_venda=id_banco)
+# --- Funções específicas de Despesas ---
+def registrar_pagamento(venda_id, financeiro_id, valor_pago, forma_pagamento, observacao=""):
+    # --- Registra um pagamento efetuado para uma venda ou lançamento financeiro ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO pagamentos (venda_id, financeiro_id, valor_pago, forma_pagamento, observacao)
+            VALUES (?, ?, ?, ?, ?)
+        """, (venda_id, financeiro_id, valor_pago, forma_pagamento, observacao))
+        return cursor.lastrowid
 
-    def visualizar_item(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-        
-        from cadastro_produtos import VisualizarProduto
-        with database.conectar() as conn:
+def cadastrar_despesa(fornecedor, descricao, categoria, valor, recorrencia, vencimento, forma_pagamento, status, parcelas=1,
+                       data_lancamento=None, data_pagamento=None, tipo_encargos='Valor Fixo', valor_encargos=0.0,
+                       tipo_descontos='Valor Fixo', valor_descontos=0.0, valor_base=None):
+    # --- Insere uma nova despesa no financeiro com recorrência e/ou parcelamento mensal ---
+    def normalizar_data(data_str):
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(data_str, fmt)
+            except ValueError:
+                continue
+        raise ValueError(f"Formato de data inválido: {data_str}")
+
+    data_inicial = normalizar_data(vencimento)
+    if valor_base is None:
+        valor_base = valor
+
+    if tipo_encargos == 'Porcentagem':
+        encargos_total = round(valor_base * (valor_encargos / 100), 2)
+    else:
+        encargos_total = round(valor_encargos, 2)
+
+    if tipo_descontos == 'Porcentagem':
+        descontos_total = round(valor_base * (valor_descontos / 100), 2)
+    else:
+        descontos_total = round(valor_descontos, 2)
+
+    valor_final = round(valor_base + encargos_total - descontos_total, 2)
+    if recorrencia == 'Parcelar':
+        valor_parc = round(valor_final / parcelas, 2)
+    else:
+        valor_parc = valor_final
+
+    if data_lancamento is None:
+        data_lancamento = datetime.now().strftime('%Y-%m-%d')
+    else:
+        data_lancamento = normalizar_data(data_lancamento).strftime('%Y-%m-%d')
+
+    if data_pagamento:
+        data_pagamento = normalizar_data(data_pagamento).strftime('%Y-%m-%d')
+
+    with conectar() as conn:
+        cursor = conn.cursor()
+        for i in range(parcelas):
+            data_venc = adicionar_meses(data_inicial, i).strftime("%Y-%m-%d")
+            cursor.execute("""
+                INSERT INTO financeiro (tipo, entidade_nome, descricao, valor, valor_base, parcela_atual, total_parcelas,
+                                       data_vencimento, data_pagamento, forma_pagamento, categoria, status, recorrencia,
+                                       data_lancamento, tipo_encargos, valor_encargos, tipo_descontos, valor_descontos)
+                VALUES ('Despesa', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (fornecedor, descricao, valor_parc, valor_base, i+1, parcelas, data_venc, data_pagamento,
+                   forma_pagamento, categoria, status, recorrencia, data_lancamento, tipo_encargos,
+                   valor_encargos, tipo_descontos, valor_descontos))
+        conn.commit()
+        return True, "Despesa cadastrada com sucesso!"
+
+def listar_despesas():
+    # --- Retorna todas as despesas registradas no sistema com seus detalhes ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, entidade_nome, descricao, valor, categoria, data_vencimento, 
+                   forma_pagamento, status, parcela_atual, total_parcelas
+            FROM financeiro 
+            WHERE tipo = 'Despesa'
+            ORDER BY data_vencimento DESC
+        """)
+        return cursor.fetchall()
+
+def atualizar_despesa(despesa_id, **kwargs):
+    # --- Modifica os dados de uma despesa existente de forma flexível ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        campos = ", ".join(f"{k} = ?" for k in kwargs.keys())
+        valores = list(kwargs.values()) + [despesa_id]
+        cursor.execute(f"UPDATE financeiro SET {campos} WHERE id = ? AND tipo = 'Despesa'", valores)
+        conn.commit()
+
+def deletar_despesa(despesa_id):
+    # --- Remove uma despesa do sistema (incluindo todas as parcelas relacionadas) ---
+    try:
+        with conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_banco,))
-            dados = cursor.fetchone()
-            if dados:
-                VisualizarProduto(self.root, dados)
+            # Busca o número total de parcelas para deletar todas
+            cursor.execute("""
+                SELECT id, total_parcelas FROM financeiro 
+                WHERE id = ? AND tipo = 'Despesa'
+            """, (despesa_id,))
+            resultado = cursor.fetchone()
+            
+            if not resultado:
+                return False, "Despesa não encontrada."
+            
+            # Deleta todas as parcelas da despesa
+            cursor.execute("""
+                DELETE FROM financeiro 
+                WHERE tipo = 'Despesa' AND id IN (
+                    SELECT id FROM financeiro 
+                    WHERE tipo = 'Despesa' AND descricao = (
+                        SELECT descricao FROM financeiro WHERE id = ?
+                    ) AND parcela_atual <= (SELECT total_parcelas FROM financeiro WHERE id = ?)
+                )
+            """, (despesa_id, despesa_id))
+            
+            conn.commit()
+            return True, "Despesa deletada com sucesso!"
+    except Exception as e:
+        return False, f"Erro ao deletar despesa: {str(e)}"
 
-    def confirmar_saida(self):
-        if messagebox.askyesno("Sair", "Deseja encerrar o sistema Ale Sapatilhas?", parent=self.root):
-            self.root.destroy()
+def buscar_despesa_por_termo(termo):
+    # --- Busca despesas por fornecedor ou descrição ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, entidade_nome, descricao, valor, categoria, data_vencimento, 
+                   forma_pagamento, status, parcela_atual, total_parcelas
+            FROM financeiro 
+            WHERE tipo = 'Despesa' AND (
+                entidade_nome LIKE ? OR descricao LIKE ?
+            )
+            ORDER BY data_vencimento DESC
+        """, (f"%{termo}%", f"%{termo}%"))
+        return cursor.fetchall()
+
+def obter_despesa_por_id(despesa_id):
+    # --- Retorna os dados de uma despesa específica ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, entidade_nome, descricao, valor, categoria, data_vencimento, 
+                   forma_pagamento, status, parcela_atual, total_parcelas
+            FROM financeiro 
+            WHERE id = ? AND tipo = 'Despesa'
+        """, (despesa_id,))
+        return cursor.fetchone()
+
+def dashboard_resumo():
+    # --- Gera um panorama rápido contendo alertas de estoque baixo e o montante total de receitas ainda não recebidas ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT produto, quantidade FROM produtos WHERE quantidade < 3 AND status_item != 'Indisponível'")
+        alertas = cursor.fetchall()
+        
+        cursor.execute("SELECT SUM(valor) FROM financeiro WHERE tipo = 'Receita' AND status = 'Pendente'")
+        res = cursor.fetchone()[0]
+        
+        return {"alertas_estoque": alertas, "total_a_receber": res if res else 0.0}
+
+def relatorio_vendas_geral():
+    # --- Realiza um join entre vendas e clientes para gerar um extrato histórico de todas as transações realizadas ---
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT v.id, c.nome, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.data_venda, v.vendedor, v.status_venda
+            FROM vendas v
+            JOIN clientes c ON v.cliente_id = c.id
+            ORDER BY v.data_venda DESC
+        """)
+        return cursor.fetchall()
+
+def fluxo_caixa_mensal(mes, ano):
+    """Consolida as parcelas nas datas específicas para visualização no fluxo de caixa[cite: 1]."""
+    with conectar() as conn:
+        cursor = conn.cursor()
+        filtro = f"{ano}-{str(mes).zfill(2)}%"
+        
+        cursor.execute("""
+            SELECT 
+                COALESCE(SUM(CASE WHEN tipo='Receita' AND status='Pago' THEN valor_pago ELSE 0 END), 0) as entradas,
+                COALESCE(SUM(CASE WHEN tipo='Despesa' AND status='Pago' THEN valor_pago ELSE 0 END), 0) as saidas,
+                COALESCE(SUM(CASE WHEN tipo='Receita' AND status='Pendente' THEN (valor - valor_pago) ELSE 0 END), 0) as a_receber,
+                COALESCE(SUM(CASE WHEN tipo='Despesa' AND status='Pendente' THEN (valor - valor_pago) ELSE 0 END), 0) as a_pagar
+            FROM financeiro 
+            WHERE data_vencimento LIKE ? OR data_pagamento LIKE ?
+        """, (filtro, filtro))
+        return cursor.fetchone()
+
+def listar_itens():
+    """Recupera produtos para o checkout[cite: 1]."""
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, produto, cor, tamanho, precocusto, precovenda, quantidade FROM produtos WHERE status_item != 'Indisponível'")
+        return cursor.fetchall()
 
 if __name__ == "__main__":
-    database.criar_tabelas() 
-    root = tk.Tk()
-    app = SistemaAleSapatilhas(root)
-    root.mainloop()
+    criar_tabelas()
+    print("✓ Banco de Dados Ale Sapatilhas Vs4.0 - Completo e Ativo.")
+
+
+
+
+    # populardb
+
+
+    import database
+import random
+from datetime import datetime
+
+def popular_banco():
+    print("=== Iniciando Povoamento do Banco de Dados Ale Sapatilhas Vs4.4 ===")
+    database.criar_tabelas()
+
+    # --- Limpeza Controlada ---
+    with database.conectar() as conn:
+        cursor = conn.cursor()
+        tabelas = ["pagamentos", "financeiro", "itens_venda", "vendas", "produtos", "clientes", "cliente_interacoes"]
+        for tabela in tabelas:
+            cursor.execute(f"DELETE FROM {tabela}")
+        cursor.execute("DELETE FROM sqlite_sequence") # Reseta IDs
+        conn.commit()
+
+    # --- CLIENTES (8 Clientes) ---
+    clientes_fake = [
+        ("Maria Silva", "12345678901", "11988887771", "maria.silva@email.com", "1990-05-15", 35, "Rua das Flores, 10", "Centro", "São Paulo", "01001-000", "Cliente VIP", 500.0),
+        ("Ana Oliveira", "23456789012", "11988887772", "ana.oliveira@email.com", "1985-08-20", 36, "Av. Brasil, 500", "Jardins", "São Paulo", "01430-000", "Pagamento em dia", 300.0),
+        ("Carla Souza", "34567890123", "11988887773", "carla.souza@email.com", "1992-12-10", 37, "Rua Chile, 12", "Mooca", "São Paulo", "03102-000", "Gosta de cores vivas", 200.0),
+        ("Juliana Lima", "45678901234", "11988887774", "juliana.lima@email.com", "1988-03-05", 34, "Rua B, 102", "Lapa", "São Paulo", "05001-000", "Novidades semanais", 100.0),
+        ("Patrícia Meira", "56789012345", "11988887775", "patricia.meira@email.com", "1995-07-25", 38, "Travessa Paz, 5", "Itaim", "São Paulo", "04531-000", "Fiel", 400.0),
+        ("Renata Costa", "67890123456", "11988887776", "renata.costa@email.com", "1993-01-30", 35, "Rua XV, 20", "Centro", "Curitiba", "80020-000", "Trabalha no centro", 150.0),
+        ("Natália Ferreira", "78901234567", "11988887777", "natalia.ferreira@email.com", "1989-11-12", 36, "Rua das Laranjeiras, 44", "Batel", "Curitiba", "80420-000", "Compra presentes", 250.0),
+        ("Bianca Santos", "89012345678", "11988887778", "bianca.santos@email.com", "1991-09-02", 37, "Av. Paulista, 1000", "Bela Vista", "São Paulo", "01310-000", "Sapatos exclusivos", 350.0),
+    ]
+
+    for c in clientes_fake:
+        database.cadastrar_cliente(c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11])
+
+    # --- PRODUTOS (15 Produtos - Adicionados mais 5 para fechar o pedido) ---
+    # Ajustado para a assinatura: (sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto)
+    produtos_fake = [
+        ("SAP-001", "Calçados", "Sapatilha Verniz", "Preta", 35, 40.0, 89.90, 18, "Casual", "Sintético", "Fábrica A", "img01.jpg"),
+        ("SAP-002", "Calçados", "Sapatilha Matelassê", "Bege", 36, 45.0, 95.00, 20, "Clássico", "Napa", "Fábrica B", "img02.jpg"),
+        ("MUL-001", "Calçados", "Mule Bico Fino", "Caramelo", 37, 50.0, 110.00, 12, "Mule", "Couro", "Fábrica A", "img03.jpg"),
+        ("SCP-001", "Calçados", "Scarpin Salto Baixo", "Nude", 38, 60.0, 150.00, 10, "Festa", "Verniz", "Fábrica B", "img05.jpg"),
+        ("RAS-001", "Calçados", "Rasteira Pedraria", "Dourada", 35, 35.0, 75.00, 16, "Verão", "Sintético", "Fábrica D", "img08.jpg"),
+        ("TEN-001", "Calçados", "Tênis Casual", "Branco", 38, 55.0, 129.90, 11, "Esportivo", "Couro", "Fábrica F", "img10.jpg"),
+        ("SNE-001", "Calçados", "Tênis Esportivo", "Cinza", 39, 48.0, 139.90, 14, "Esportivo", "Malha", "Fábrica G", "img11.jpg"),
+        ("MOC-001", "Calçados", "Mocassim Luxo", "Marrom", 37, 42.0, 129.00, 8, "Casual", "Couro", "Fábrica C", "img12.jpg"),
+        ("BNK-001", "Calçados", "Bota Cano Curto", "Preto", 38, 70.0, 179.90, 9, "Inverno", "Couro", "Fábrica E", "img13.jpg"),
+        ("ESP-001", "Calçados", "Espadrille Rafia", "Natural", 36, 38.0, 99.90, 7, "Verão", "Rafia", "Fábrica H", "img14.jpg"),
+        # +5 variações para completar 15
+        ("SAP-003", "Calçados", "Sapatilha Soft", "Azul", 34, 40.0, 85.00, 5, "Casual", "Tecido", "Fábrica A", ""),
+        ("RAS-002", "Calçados", "Chinelo Slim", "Rosa", 36, 20.0, 45.00, 25, "Verão", "Borracha", "Fábrica D", ""),
+        ("SCP-002", "Calçados", "Scarpin Lux", "Vermelho", 37, 80.0, 199.00, 4, "Festa", "Nobuck", "Fábrica B", ""),
+        ("TEN-002", "Calçados", "Tênis Plataforma", "Branco", 35, 65.0, 159.00, 6, "Casual", "Lona", "Fábrica F", ""),
+        ("MOC-002", "Calçados", "Mocassim Drive", "Azul Marinho", 40, 55.0, 115.00, 10, "Casual", "Couro", "Fábrica C", ""),
+    ]
+
+    for p in produtos_fake:
+        database.cadastrar_produto(*p)
+
+    # --- DESPESAS (5 Despesas com Parcelamento/Trimestral) ---
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    # Assinatura: (fornecedor, descricao, categoria, valor, recorrencia, vencimento, forma_pagamento, status, parcelas, ...)
+    despesas_fake = [
+        ("Imobiliária", "Aluguel Loja", "Infraestrutura", 3000.0, "Mensal", hoje, "PIX", "Pendente", 1),
+        ("Coelba", "Energia", "Utilidades", 450.0, "Mensal", hoje, "Boleto", "Pendente", 1),
+        ("Vivo", "Internet Fiber", "Comunicação", 150.0, "Mensal", hoje, "Cartão", "Pendente", 1),
+        ("Fornecedor Couros", "Compra de Estoque", "Produtos", 1200.0, "Parcelar", hoje, "Boleto", "Pendente", 3), # Trimestral (3x)
+        ("Marketing Digital", "Anúncios Meta", "Marketing", 600.0, "Parcelar", hoje, "PIX", "Pendente", 2),
+    ]
+
+    for d in despesas_fake:
+        database.cadastrar_despesa(*d)
+
+    # --- 5 VENDAS (Variando Crediário e Outras Formas) ---
+    with database.conectar() as conn:
+        cursor = conn.cursor()
+        clientes_ids = [row[0] for row in cursor.execute("SELECT id FROM clientes").fetchall()]
+        produtos_pool = [{"id": r[0], "preco": r[1]} for r in cursor.execute("SELECT id, precovenda FROM produtos WHERE quantidade > 0").fetchall()]
+
+    if clientes_ids and produtos_pool:
+        print("-> Registrando 5 vendas estratégicas...")
+        for i in range(5):
+            c_id = clientes_ids[i]
+            # Venda 1 e 2 sempre Crediário 3x para testar o financeiro
+            if i < 2:
+                forma, parc = "Crediário", 3
+            else:
+                forma, parc = random.choice(["Pix", "Cartão"]), 1
+            
+            p_sorteado = random.choice(produtos_pool)
+            itens = [{"id": p_sorteado["id"], "qtd": 1, "preco": p_sorteado["preco"]}]
+            
+            database.realizar_venda_segura(c_id, itens, forma, parc, desconto_total=5.0)
+
+    # --- Auditoria de Pagamento (Quitar 1 despesa e 1 parcela de venda) ---
+    with database.conectar() as conn:
+        cursor = conn.cursor()
+        # Quita a primeira despesa
+        id_desp = cursor.execute("SELECT id FROM financeiro WHERE tipo='Despesa' LIMIT 1").fetchone()[0]
+        database.quitar_titulo_financeiro(id_desp, "PIX")
+        
+    print("\n✅ Base de Testes Vs4.4 populada com sucesso!")
+
+if __name__ == "__main__":
+    popular_banco()
+
+
+
+
+    # main
+
+    

@@ -358,6 +358,61 @@ def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, de
             conn.rollback()
             return False, f"Erro ao processar venda: {str(e)}"
 
+def cancelar_venda(venda_id, motivo="Cancelamento solicitado"):
+    """
+    Cancela uma venda, devolve os itens ao estoque e 
+    cancela as parcelas pendentes no financeiro.
+    """
+    with conectar() as conn:
+        cursor = conn.cursor()
+        try:
+            # 1. Verificar se a venda existe e se já não está cancelada
+            cursor.execute("SELECT status_venda FROM vendas WHERE id = ?", (venda_id,))
+            venda = cursor.fetchone()
+            
+            if not venda:
+                return False, "Venda não encontrada."
+            if venda[0] == 'Cancelada':
+                return False, "Esta venda já foi cancelada anteriormente."
+
+            # 2. Devolver produtos ao estoque
+            # Buscamos os itens daquela venda
+            cursor.execute("SELECT produto_id, quantidade FROM itens_venda WHERE venda_id = ?", (venda_id,))
+            itens = cursor.fetchall()
+            
+            for produto_id, qtd in itens:
+                cursor.execute("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?", (qtd, produto_id))
+
+            # 3. Tratar o Financeiro
+            # Cancelamos parcelas que ainda não foram pagas
+            cursor.execute("""
+                UPDATE financeiro 
+                SET status = 'Cancelado', descricao = descricao || ' (VENDA CANCELADA)'
+                WHERE venda_id = ? AND status != 'Pago'
+            """, (venda_id,))
+            
+            # Nota: Parcelas já PAGAS permanecem como 'Pago', mas a venda muda de status.
+            # Se desejar estornar o dinheiro já pago, seria necessário criar uma 'Despesa' de estorno.
+
+            # 4. Atualizar o status da venda
+            cursor.execute("""
+                UPDATE vendas 
+                SET status_venda = 'Cancelada' 
+                WHERE id = ?
+            """, (venda_id,))
+
+            # 5. Registrar na observação do cliente (Opcional - CRM)
+            cursor.execute("SELECT cliente_id FROM vendas WHERE id = ?", (venda_id,))
+            cliente_id = cursor.fetchone()[0]
+            registrar_interacao(cliente_id, 'Presencial', 'Cancelamento de Venda', f"Venda #{venda_id} cancelada. Motivo: {motivo}", "Sistema")
+
+            conn.commit()
+            return True, f"Venda #{venda_id} cancelada e estoque atualizado."
+
+        except Exception as e:
+            conn.rollback()
+            return False, f"Erro ao cancelar venda: {str(e)}"
+
 # --- Financeiro e relatórios ---
 def quitar_titulo_financeiro(financeiro_id, forma_pgto):
     # --- Registra o pagamento de uma conta a pagar ou receber alterando seu status e salvando a data da liquidação ---
