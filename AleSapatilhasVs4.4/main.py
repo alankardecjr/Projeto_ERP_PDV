@@ -11,18 +11,19 @@ class SistemaAleSapatilhas:
         
         ui_utils.calcular_dimensoes_janela(self.root, maximizar=True)
            
+        # --- Paleta de cores ---
         paleta = ui_utils.get_paleta()
-        self.bg_fundo       = paleta.get("bg_fundo", "#F4F6F9")
-        self.bg_card        = paleta.get("bg_card", "#FFFFFF")
-        self.cor_borda      = paleta.get("cor_borda", "#E1E6EB")
-        self.cor_texto      = paleta.get("cor_texto", "#333333")
-        self.cor_lbl        = paleta.get("cor_lbl", "#666666")
-        self.cor_destaque   = paleta.get("cor_destaque", "#4A90E2")
-        self.cor_btn_menu   = paleta.get("cor_btn_menu", "#2C3E50")
-        self.cor_btn_sair   = paleta.get("cor_btn_sair", "#1A252F")
-        self.cor_btn_acao   = paleta.get("cor_btn_acao", "#2ECC71")
-        self.cor_hover_btn  = paleta.get("cor_hover_btn", "#34495E")
-        self.cor_hover_field = paleta.get("cor_hover_field", "#BDC3C7") # Cor preventiva criada
+        self.bg_fundo       = paleta["bg_fundo"]
+        self.bg_card        = paleta["bg_card"]
+        self.cor_borda      = paleta["cor_borda"]
+        self.cor_texto      = paleta["cor_texto"]
+        self.cor_lbl        = paleta["cor_lbl"]
+        self.cor_destaque   = paleta["cor_destaque"]
+        self.cor_btn_menu   = paleta["cor_btn_menu"]
+        self.cor_btn_sair   = paleta["cor_btn_sair"]
+        self.cor_btn_acao   = paleta["cor_btn_acao"]
+        self.cor_hover_btn  = paleta["cor_hover_btn"]
+        self.cor_hover_field = paleta["cor_hover_field"]
 
         self.root.configure(bg=self.bg_fundo)
         self.modo_atual = "vendas"

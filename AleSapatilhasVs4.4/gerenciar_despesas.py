@@ -8,24 +8,27 @@ class JanelaGerenciarDespesas(tk.Toplevel):
     def __init__(self, master, dados_despesa=None):
         super().__init__(master)
         
+        # --- Paleta de cores ---
         paleta = ui_utils.get_paleta()
-        self.bg_fundo       = paleta.get("bg_fundo", "#F4F6F9")
-        self.bg_card        = paleta.get("bg_card", "#FFFFFF")
-        self.cor_borda      = paleta.get("cor_borda", "#E1E6EB")
-        self.cor_texto      = paleta.get("cor_texto", "#333333")
-        self.cor_lbl        = paleta.get("cor_lbl", "#666666")
-        self.cor_destaque   = paleta.get("cor_destaque", "#4A90E2")
-        self.cor_btn_menu   = paleta.get("cor_btn_menu", "#2C3E50")
-        self.cor_btn_sair   = paleta.get("cor_btn_sair", "#1A252F")
-        self.cor_btn_acao   = paleta.get("cor_btn_acao", "#2ECC71")
-        self.cor_hover_btn  = paleta.get("cor_hover_btn", "#34495E")
-        self.cor_hover_field = paleta.get("cor_hover_field", "#BDC3C7")
+        self.bg_fundo       = paleta["bg_fundo"]
+        self.bg_card        = paleta["bg_card"]
+        self.cor_borda      = paleta["cor_borda"]
+        self.cor_texto      = paleta["cor_texto"]
+        self.cor_lbl        = paleta["cor_lbl"]
+        self.cor_destaque   = paleta["cor_destaque"]
+        self.cor_btn_menu   = paleta["cor_btn_menu"]
+        self.cor_btn_sair   = paleta["cor_btn_sair"]
+        self.cor_btn_acao   = paleta["cor_btn_acao"]
+        self.cor_hover_btn  = paleta["cor_hover_btn"]
+        self.cor_hover_field = paleta["cor_hover_field"]
 
+        # --- Configurações da janela ---
         self.title("Alê Sapatilhas - Gerenciamento de Despesas")
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
         
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=650, altura_desejada=980)
+        # --- Aplicar dimensões padrão (600px largura, altura aumentada) ---
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=650, altura_desejada=950)
         
         self.despesa_id = dados_despesa[0] if dados_despesa else None
         self.fornecedor_selecionado_id = None
@@ -75,6 +78,12 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         ent.bind("<Enter>", on_enter); ent.bind("<Leave>", on_leave)
         ent.bind("<FocusIn>", on_focus_in); ent.bind("<FocusOut>", on_focus_out)
 
+    def _manter_em_primeiro_plano(self):
+        try:
+            self.attributes("-topmost", True)
+        except Exception as e:
+            messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}", parent=self)
+
     def criar_widgets(self):
         wrapper = tk.Frame(self, bg=self.bg_fundo)
         wrapper.pack(fill="both", expand=True)
@@ -94,7 +103,20 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         main_frame.columnconfigure(2, weight=1)
-
+     
+        # --- Helpers de estilo (Hover e Input) ---
+        def aplicar_estilo_foco(ent):
+            def on_enter(e):
+                if self.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
+            def on_leave(e):
+                if self.focus_get() != ent: ent.config(highlightbackground=self.cor_borda)
+            def on_focus_in(e): ent.config(highlightbackground=self.cor_destaque, highlightthickness=2)
+            def on_focus_out(e): ent.config(highlightbackground=self.cor_borda, highlightthickness=1)
+            ent.bind("<Enter>", on_enter)
+            ent.bind("<Leave>", on_leave)
+            ent.bind("<FocusIn>", on_focus_in)
+            ent.bind("<FocusOut>", on_focus_out)
+        
         # Cabeçalho do Módulo
         tk.Label(main_frame, text=" 💸 Gerenciamento de Despesas (Saídas)", bg=self.bg_fundo, fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
 
@@ -208,9 +230,10 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         self.tree_parcelas.grid(row=4, column=0, columnspan=3, sticky="ew", padx=5)
         self.tree_parcelas.bind("<<TreeviewSelect>>", self.carregar_parcela_selecionada)
 
-        # --- BOTÕES DE AÇÃO OPERACIONAL ---
-        self.btn_salvar = tk.Button(main_frame, text="SALVAR / LANÇAR DESPESA", bg=self.cor_btn_acao, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.salvar_crud)
-        self.btn_salvar.grid(row=5, column=0, columnspan=3, pady=(15, 5), sticky="ew", ipady=5)
+        # --- BOTÕES DE AÇÃO OPERACIONAL (Dual Mode e Hover) ---
+        texto_btn = "ATUALIZAR DESPESA" if self.despesa_id else "SALVAR DESPESA"
+        self.btn_salvar = tk.Button(main_frame, text=texto_btn, bg=self.cor_btn_acao, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.validar_e_salvar)
+        self.btn_salvar.grid(row=20, column=0, columnspan=3, pady=(10, 0), sticky="ew", ipady=6)
         
         self.btn_deletar = tk.Button(main_frame, text="EXCLUIR REGISTRO FINANCEIRO", bg="#E74C3C", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.excluir_crud)
         self.btn_deletar.grid(row=6, column=0, columnspan=3, pady=2, sticky="ew", ipady=4)
@@ -218,7 +241,14 @@ class JanelaGerenciarDespesas(tk.Toplevel):
 
         self.btn_cancelar = tk.Button(main_frame, text="FECHAR JANELA", bg=self.cor_btn_sair, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.destroy)
         self.btn_cancelar.grid(row=7, column=0, columnspan=3, pady=(5, 0), sticky="ew", ipady=4)
+      
+       # Bind Hovers
+        self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
+        self.btn_salvar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_btn_acao))
+        self.btn_cancelar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
+        self.btn_cancelar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_btn_sair))
 
+    # --- LÓGICA ---
     def toggle_recorrencia(self, event=None):
         if self.cb_recorrencia.get() == "Parcelar":
             self.lbl_parc.grid(row=8, column=2, sticky="w", padx=5)
@@ -391,3 +421,10 @@ class JanelaGerenciarDespesas(tk.Toplevel):
                 self.destroy()
             else:
                 messagebox.showerror("Erro", msg, parent=self)
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.withdraw()
+    JanelaGerenciarDespesas(root)
+    root.mainloop()
