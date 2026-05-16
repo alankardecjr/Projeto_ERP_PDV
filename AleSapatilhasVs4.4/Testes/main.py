@@ -9,23 +9,24 @@ class SistemaAleSapatilhas:
         self.root = root
         self.root.title("Alê Sapatilhas - Gestão Integrada")
         
+        # --- Aplicar dimensões maximizadas ---
         ui_utils.calcular_dimensoes_janela(self.root, maximizar=True)
            
+        # --- Paleta de cores (Padronizada) ---
         paleta = ui_utils.get_paleta()
-        self.bg_fundo       = paleta.get("bg_fundo", "#F4F6F9")
-        self.bg_card        = paleta.get("bg_card", "#FFFFFF")
-        self.cor_borda      = paleta.get("cor_borda", "#E1E6EB")
-        self.cor_texto      = paleta.get("cor_texto", "#333333")
-        self.cor_lbl        = paleta.get("cor_lbl", "#666666")
-        self.cor_destaque   = paleta.get("cor_destaque", "#4A90E2")
-        self.cor_btn_menu   = paleta.get("cor_btn_menu", "#2C3E50")
-        self.cor_btn_sair   = paleta.get("cor_btn_sair", "#1A252F")
-        self.cor_btn_acao   = paleta.get("cor_btn_acao", "#2ECC71")
-        self.cor_hover_btn  = paleta.get("cor_hover_btn", "#34495E")
-        self.cor_hover_field = paleta.get("cor_hover_field", "#BDC3C7") # Cor preventiva criada
+        self.bg_fundo       = paleta["bg_fundo"]
+        self.bg_card        = paleta["bg_card"]
+        self.cor_borda      = paleta["cor_borda"]
+        self.cor_texto      = paleta["cor_texto"]
+        self.cor_lbl        = paleta["cor_lbl"]
+        self.cor_destaque   = paleta["cor_destaque"]
+        self.cor_btn_menu   = paleta["cor_btn_menu"]
+        self.cor_btn_sair   = paleta["cor_btn_sair"]
+        self.cor_btn_acao   = paleta["cor_btn_acao"]
+        self.cor_hover_btn  = paleta["cor_hover_btn"]
 
         self.root.configure(bg=self.bg_fundo)
-        self.modo_atual = "vendas"
+        self.modo_atual = "vendas"  # Modo inicial
         self.botoes_menu = {}  # Dicionário para armazenar referências dos botões do menu
         
         self.setup_ui()
@@ -33,16 +34,17 @@ class SistemaAleSapatilhas:
 
     def formatar_data_exibicao(self, data_str):
         if data_str:
-            try: 
+            try:
                 return datetime.strptime(data_str, "%Y-%m-%d").strftime("%d/%m/%Y")
-            except ValueError: return data_str
+            except ValueError:
+                return data_str
         return ""
     
     def _aplicar_estilo_foco(self, ent):
         def on_enter(e):
-            if ent.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
+            if self.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
         def on_leave(e):
-            if ent.focus_get() != ent: ent.config(highlightbackground=self.cor_borda)
+            if self.focus_get() != ent: ent.config(highlightbackground=self.cor_borda)
         def on_focus_in(e): ent.config(highlightbackground=self.cor_destaque, highlightthickness=2)
         def on_focus_out(e): ent.config(highlightbackground=self.cor_borda, highlightthickness=1)
         ent.bind("<Enter>", on_enter); ent.bind("<Leave>", on_leave)
@@ -71,7 +73,7 @@ class SistemaAleSapatilhas:
             ("", None, None), 
             ("➕ ADICIONAR VENDAS", self.abrir_cadastro_vendas, "vendas"),
             ("📑 GERENCIAR VENDAS", self.exibir_vendas, "vendas"),
-            ("💸 ADICIONAR DESPESAS", self.abrir_cadastro_despesas, "financeiro"), 
+            ("💸 GERENCIAR DESPESAS", self.abrir_cadastro_despesas, "financeiro"), 
             ("👤 ADICIONAR CONTATOS", self.abrir_cadastro_cliente, "clientes"),
             ("👥 GERENCIAR CONTATOS", self.exibir_clientes, "clientes"),
             ("📦 ADICIONAR PRODUTOS", self.abrir_cadastro_produto, "produtos"),
@@ -79,7 +81,9 @@ class SistemaAleSapatilhas:
             ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
             ("📊 DASHBOARD", self.exibir_dashboard, "dashboard"),
             ("🔄 ATUALIZAR", self.atualizar_lista, None),
-            ("", None, None), ("", None, None),
+            ("", None, None), 
+            ("", None, None), 
+            ("", None, None), 
             ("🚪 SAIR", self.confirmar_saida, None)
         ]
 
@@ -89,7 +93,8 @@ class SistemaAleSapatilhas:
                 continue
 
             # --- Criando botões com estilo e hover ---
-            btn = tk.Button(self.sidebar, text=texto, command=lambda c=comando, m=modo: self.executar_comando_menu(c, m), **btn_estilo)
+            btn = tk.Button(self.sidebar, text=texto,
+                            command=lambda c=comando, m=modo: self.executar_comando_menu(c, m), **btn_estilo)
             btn.pack(fill="x", pady=2)
             self.aplicar_hover(btn)
 
@@ -100,11 +105,13 @@ class SistemaAleSapatilhas:
         # --- Container Principal para exibir conteúdo dinâmico ---
         self.container = tk.Frame(self.root, bg=self.bg_fundo, padx=20, pady=20)
         self.container.pack(side="right", fill="both", expand=True)
-      
+
         # --- Barra de busca rápida ---
+        # --- Chamada do Componente Reutilizável de Busca ---
         self.criar_barra_busca(self.container)
 
-        self.lbl_titulo = tk.Label(self.container, text="Lista", font=("Segoe UI", 18, "bold"), bg=self.bg_fundo, fg=self.cor_texto)
+        self.lbl_titulo = tk.Label(self.container, text="Lista", font=("Segoe UI", 18, "bold"), 
+                                   bg=self.bg_fundo, fg=self.cor_texto)
         self.lbl_titulo.pack(anchor="w", pady=(0, 10))
         
         # --- Tabela (Treeview) ---
@@ -119,20 +126,22 @@ class SistemaAleSapatilhas:
 
         self.tree = ttk.Treeview(self.tree_frame, show="headings", selectmode="browse")
         self.tree.pack(side="left", fill="both", expand=True)
-       
+
         # --- Bindings de interação ---
         self.tree.bind("<Double-1>", lambda e: self.editar_selecionado())
         self.tree.bind("<Button-3>", self.mostrar_menu_contexto)
-        self.tree.bind("<Motion>", self.focus_linha_mouse)
+        self.tree.bind("<Motion>", self.focus_linha_mouse)  # Focus ao passar mouse
         
         # Focus no campo de busca
         self.ent_busca.bind("<Enter>", lambda e: self.ent_busca.focus())
-      
+        
         # Atualizar destaque do menu
         self.atualizar_destaque_menu()
 
     # -- Componente de Barra de Busca Avançada ---
     def criar_barra_busca(self, container_pai):
+        """Cria uma barra de busca modular, reutilizável e com recursos avançados de filtragem."""
+        
         # Frame Principal da Barra de Busca
         search_frame = tk.Frame(container_pai, bg=self.bg_fundo)
         search_frame.pack(fill="x", pady=(0, 15))
@@ -140,10 +149,14 @@ class SistemaAleSapatilhas:
 
         # --- Campo de Entrada com Ícone/Placeholder Integrado ---
         self.placeholder_busca = "🔍 Digite para buscar..."
-        self.ent_busca = tk.Entry(search_frame, font=("Segoe UI", 9), bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
+        
+        self.ent_busca = tk.Entry(
+            search_frame, font=("Segoe UI", 9), bg=self.bg_card, fg=self.cor_texto,
+            relief="flat", highlightthickness=1, highlightbackground=self.cor_borda
+        )
         self.ent_busca.pack(side="left", fill="x", expand=True, ipady=5, padx=(0, 10))
-      
-        # Inserir o subtítulo interno (Placeholder) inicial        
+        
+        # Inserir o subtítulo interno (Placeholder) inicial
         self.ent_busca.insert(0, self.placeholder_busca)
         self.ent_busca.config(fg="gray")
 
@@ -165,10 +178,11 @@ class SistemaAleSapatilhas:
             "pady": 5
         }
 
-        # Adicionando as opções ao Menu
         # --- Botão 1: Filtrar (Menubutton para Menu Dropdown) ---
         btn_filtrar = tk.Menubutton(search_frame, text="⏳ FILTRAR", **btn_estilo)
         menu_filtrar = tk.Menu(btn_filtrar, tearoff=0, bg=self.bg_card, fg=self.cor_texto, font=("Segoe UI", 9))
+        
+        # Adicionando as opções solicitadas ao Menu
         menu_filtrar.add_command(label="Tipo", command=lambda: self.aplicar_filtro_avancado("Tipo"))
         menu_filtrar.add_command(label="Data", command=lambda: self.aplicar_filtro_avancado("Data"))
         menu_filtrar.add_command(label="Status", command=lambda: self.aplicar_filtro_avancado("Status"))
@@ -186,12 +200,15 @@ class SistemaAleSapatilhas:
         btn_limpar.bind("<Enter>", lambda e: btn_limpar.config(bg=self.cor_hover_btn))
         btn_limpar.bind("<Leave>", lambda e: btn_limpar.config(bg=self.cor_btn_menu))
 
+    # --- Métodos de Controle Internos ---
     def _remover_placeholder(self, event):
+        """Remove o texto de orientação quando o usuário clica no campo."""
         if self.ent_busca.get() == self.placeholder_busca:
             self.ent_busca.delete(0, tk.END)
             self.ent_busca.config(fg=self.cor_texto)
 
     def _inserir_placeholder(self, event):
+        """Recoloca o texto de orientação caso o campo fique vazio."""
         if not self.ent_busca.get().strip():
             self.ent_busca.insert(0, self.placeholder_busca)
             self.ent_busca.config(fg="gray")
@@ -199,17 +216,21 @@ class SistemaAleSapatilhas:
     def aplicar_filtro_avancado(self, tipo_filtro):
         """Garante o gancho para aplicar inteligência de filtros baseada no modo ativo."""
         # Aqui podemos interceptar qual botão foi clicado para abrir sub-caixas ou ordenar a Treeview
-        messagebox.showinfo("Filtros", f"Filtro por '{tipo_filtro}' acionado.")
+        messagebox.showinfo("Filtros", f"Filtro por '{tipo_filtro}' acionado para o modo: {self.modo_atual.upper()}")
 
     def limpar_busca_e_filtros(self):
+        """Limpa o campo de texto, restaura o placeholder e atualiza os dados da tabela."""
         self.ent_busca.delete(0, tk.END)
         self._inserir_placeholder(None)
-        self.root.focus()
+        self.root.focus()  # Tira o foco do campo para forçar a renderização do placeholder
+        
         # Executa a restauração da lista original baseado no modo atual
         self.atualizar_lista()
 
     def executar_comando_menu(self, comando, modo):
-        if comando: comando()
+        """Executa comando do menu e atualiza destaque"""
+        if comando:
+            comando()
         if modo:
             self.modo_atual = modo
             self.atualizar_destaque_menu()
@@ -218,7 +239,10 @@ class SistemaAleSapatilhas:
         """Atualiza destaque visual do botão do menu ativo"""
         for modo, botoes in self.botoes_menu.items():
             for btn in botoes:
-                btn.config(bg=self.cor_destaque if modo == self.modo_atual else self.cor_btn_menu)
+                if modo == self.modo_atual:
+                    btn.config(bg=self.cor_destaque, fg="white")
+                else:
+                    btn.config(bg=self.cor_btn_menu, fg="white")
 
     def confirmar_acao_menu(self, titulo, func, mensagem=None):
         """Mostra confirmação antes de executar uma ação de menu de contexto."""
@@ -229,11 +253,12 @@ class SistemaAleSapatilhas:
             func()
 
     def focus_linha_mouse(self, event):
+        """Define foco na linha onde o mouse está passando"""
         item = self.tree.identify_row(event.y)
         if item:
             self.tree.focus(item)
             self.tree.selection_set(item)
-
+        
     # --- Função para preparar colunas da Treeview de acordo com o modo atual ---
     def preparar_colunas(self, colunas):
         self.tree.delete(*self.tree.get_children())
@@ -246,7 +271,7 @@ class SistemaAleSapatilhas:
     def exibir_clientes(self):
         self.modo_atual = "clientes"
         self.lbl_titulo.config(text="👥 CONTATOS")
-        self.preparar_colunas(("tipo", "nome", "cpf/cnpj", "telefone", "aniversario", "calcado", "limite", "status"))    
+        self.preparar_colunas(( "tipo", "nome", "cpf/cnpj", "telefone", "aniversario", "calcado", "limite", "status"))    
         for c in database.exibir_clientes():
             # c[1]=tipo, c[2]=nome, c[3]=cpf, c[4]=telefone, c[6]=aniversario, c[7]=calcado, c[13]=limite, c[15]=status
             self.tree.insert("", "end", iid=c[0], values=(c[1], c[2], c[3], c[4], self.formatar_data_exibicao(c[6]), c[7], f"R$ {c[13]:.2f}", c[15]))
@@ -254,6 +279,7 @@ class SistemaAleSapatilhas:
     def exibir_produtos(self):
         self.modo_atual = "produtos"
         self.lbl_titulo.config(text="👠 ESTOQUE")
+        # Ajustado para bater com a ordem do database.exibir_produtos()
         self.preparar_colunas(("sku", "produto", "material", "cor", "tamanho", "estoque", "preço", "fornecedor", "status"))
         for i in database.exibir_produtos():
             # i[1]=sku, i[3]=produto, i[10]=material, i[4]=cor, i[5]=tamanho, i[8]=quantidade, i[7]=precovenda, i[11]=fornecedor, i[12]=status_item
@@ -270,13 +296,15 @@ class SistemaAleSapatilhas:
         self.modo_atual = "financeiro"
         self.lbl_titulo.config(text="💸 FLUXO DE CAIXA")
         self.preparar_colunas(("tipo", "nome", "descrição", "valor", "vencimento", "pagamento", "forma", "categoria", "recorrencia", "status"))
+    
         for f in database.obter_todos_registros_financeiros():
             tag = ("cancelado",) if f[10] == "Cancelado" else ()
             self.tree.insert("", "end", iid=f[0], values=(f[1], f[2], f[3], f"R$ {f[4]:.2f}", self.formatar_data_exibicao(f[5]), self.formatar_data_exibicao(f[6]), f[7], f[8], f[9], f[10]), tags=tag)
 
     def exibir_dashboard(self):
         res = database.dashboard_resumo()
-        msg = f"📊 STATUS DA LOJA\n{'-'*30}\nContas a Receber: R$ {res['total_a_receber']:.2f}\n"
+        msg = f"📊 STATUS DA LOJA\n{'-'*30}\n"
+        msg += f"Contas a Receber: R$ {res['total_a_receber']:.2f}\n"
         if res['alertas_estoque']:
             msg += f"\n🚨 ALERTAS DE ESTOQUE:\n"
             for item in res['alertas_estoque']: msg += f"- {item[0]}: {item[1]} un.\n"
@@ -287,16 +315,19 @@ class SistemaAleSapatilhas:
     def abrir_cadastro_vendas(self):
         selection = self.tree.selection()
         cliente_selecionado = None
+        
         if self.modo_atual == "clientes" and selection:
-            valores = self.tree.item(selection[0], "values")
-            cliente_selecionado = (selection[0], valores[1], valores[3])
+            item_id = selection[0]
+            valores = self.tree.item(item_id, "values")
+            cliente_selecionado = (item_id, valores[0], valores[3])  # (id, nome, telefone)
+        
         from cadastro_vendas import JanelaCadastroVendas
         JanelaCadastroVendas(self.root, cliente_selecionado)
         self.exibir_vendas()
 
     def abrir_cadastro_despesas(self):
-        from gerenciar_despesas import JanelaGerenciarDespesas
-        JanelaGerenciarDespesas(self.root)
+        from gestao_financeira import JanelaGestaoFinanceira
+        JanelaGestaoFinanceira(self.root)
         self.exibir_financeiro()
 
     def abrir_cadastro_cliente(self):
@@ -312,7 +343,7 @@ class SistemaAleSapatilhas:
     def editar_selecionado(self):
         item_id = self.tree.selection()
         if not item_id: return
-        id_banco = item_id[0]
+        id_banco = item_id[0]  # iid é o id do banco
 
         if self.modo_atual == "clientes":
             from cadastro_clientes import JanelaCadastroClientes
@@ -342,31 +373,50 @@ class SistemaAleSapatilhas:
 
     def editar_financeiro_registro(self):
         item = self.tree.selection()
-        if not item: return
+        if not item:
+            return
         registro_id = item[0]
 
-        from gerenciar_despesas import JanelaGerenciarDespesas
-        from gerenciar_receitas import JanelaGerenciarReceitas
+        from gestao_financeira import JanelaGestaoFinanceira
+        from cadastro_vendas import JanelaCadastroVendas
 
         with database.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT tipo, venda_id FROM financeiro WHERE id = ?", (registro_id,))
             result = cursor.fetchone()
-            if not result: return
+            if not result:
+                messagebox.showerror("Erro", "Registro financeiro não encontrado.", parent=self.root)
+                return
 
             tipo, venda_id = result
             if tipo == "Despesa":
                 cursor.execute("SELECT * FROM financeiro WHERE id = ?", (registro_id,))
                 dados = cursor.fetchone()
                 if dados:
-                    JanelaGerenciarDespesas(self.root, dados_despesa=dados)
+                    JanelaGestaoFinanceira(self.root, dados_despesa=dados)
                     self.exibir_financeiro()
-            elif tipo == "Receita" and venda_id:
-                cursor.execute("SELECT v.id, c.id, c.nome, c.cpf, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda FROM vendas v JOIN clientes c ON v.cliente_id = c.id WHERE v.id = ?", (venda_id,))
+            elif tipo == "Receita":
+                if not venda_id:
+                    messagebox.showerror("Erro", "Registro financeiro sem venda vinculada.", parent=self.root)
+                    return
+                cursor.execute("""
+                    SELECT v.id, c.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
+                    FROM vendas v
+                    JOIN clientes c ON v.cliente_id = c.id
+                    WHERE v.id = ?
+                """, (venda_id,))
                 dados = cursor.fetchone()
                 if dados:
-                    dados_venda = {'id': dados[0], 'cliente': f"{dados[2]} - {dados[3]} - {dados[4]}", 'total': dados[5], 'forma': dados[6], 'parcelas': dados[7], 'desconto': dados[8], 'data': dados[9]}
-                    JanelaGerenciarReceitas(self.root, cliente_selecionado=(dados[1], dados[2], dados[3]), dados_venda=dados_venda)
+                    dados_venda = {
+                        'id': dados[0],
+                        'cliente': f"{dados[2]} - {dados[3]}",
+                        'total': dados[4],
+                        'forma': dados[5],
+                        'parcelas': dados[6],
+                        'desconto': dados[7],
+                        'data': dados[8]
+                    }
+                    JanelaCadastroVendas(self.root, cliente_selecionado=(dados[1], dados[2], dados[3]), dados_venda=dados_venda)
                     self.exibir_vendas()
 
     # --- Função para mostrar menu de contexto ---
@@ -380,34 +430,48 @@ class SistemaAleSapatilhas:
                 menu.add_command(label="Editar Contato", command=self.editar_selecionado)
                 menu.add_command(label="Visualizar Contato", command=self.visualizar_cliente)
                 menu.add_separator()
-                for status in ["✓ Ativoo", "★ VIP", "⛔ Bloqueado", "✗ Inativo"]:
-                    menu.add_command(label=status, command=lambda s=status: self._mudar_status_cliente(s))
+                menu.add_command(label="✓ Ativo", command=lambda: self._mudar_status_cliente("Ativo"))
+                menu.add_command(label="★ VIP", command=lambda: self._mudar_status_cliente("Vip"))
+                menu.add_command(label="⛔ Bloqueado", command=lambda: self._mudar_status_cliente("Bloqueado"))
+                menu.add_command(label="✗ Inativo", command=lambda: self._mudar_status_cliente("Inativo"))
                 
             elif self.modo_atual == "produtos":
                 menu.add_command(label="Editar Produto", command=self.editar_selecionado)
                 menu.add_command(label="Visualizar Produto", command=self.visualizar_item)
                 menu.add_separator()
-                for status in ["✓ Disponível", "✗ Indisponível", "★ Promocional"]:
-                    menu.add_command(label=status, command=lambda s=status: self._mudar_status_produto(s))
+                menu.add_command(label="✓ Disponível", command=lambda: self._mudar_status_produto("Disponível"))
+                menu.add_command(label="✗ Indisponível", command=lambda: self._mudar_status_produto("Indisponível"))
+                menu.add_command(label="⭐ Promocional", command=lambda: self._mudar_status_produto("Promocional"))
                 
             elif self.modo_atual == "financeiro":
                 # Verificar o tipo do registro selecionado
-                valores = self.tree.item(item, "values")
-                tipo_reg = valores[0] if valores else "Registro"
-                menu.add_command(label=f"Editar {tipo_reg}", command=self.editar_selecionado)
-                menu.add_command(label=f"Visualizar {tipo_reg}", command=self.visualizar_despesa)
+                item_id = self.tree.selection()
+                tipo_registro = "Despesa"  # padrão
+                if item_id:
+                    valores = self.tree.item(item_id[0], "values")
+                    if valores and len(valores) > 0:
+                        tipo_registro = valores[0]  # primeira coluna é "tipo"
+                
+                visualizar_label = f"Visualizar {tipo_registro}"
+                            
+                menu.add_command(label=f"Editar {tipo_registro}", command=self.editar_despesa)
+                menu.add_command(label=visualizar_label, command=self.visualizar_despesa)
                 menu.add_separator()
-                for status in ["◎ Pendentendente", "✓ Pago", "⚠ Atrasado", "✗ Cancelado"]:
-                    menu.add_command(label=status, command=lambda s=status: self._mudar_status_despesa(s))
+                menu.add_command(label="◎ Pendente", command=lambda: self._mudar_status_despesa("Pendente"))
+                menu.add_command(label="✓ Pago", command=lambda: self._mudar_status_despesa("Pago"))
+                menu.add_command(label="⚠ Atrasado", command=lambda: self._mudar_status_despesa("Atrasado"))
+                menu.add_command(label="✗ Cancelado", command=lambda: self._mudar_status_despesa("Cancelado"))
                 
             elif self.modo_atual == "vendas":
                 menu.add_command(label="Editar Venda", command=self.editar_venda)
                 menu.add_command(label="Visualizar Venda", command=self.visualizar_venda)
                 menu.add_separator()
-                for status in ["✓ Finalizada", "⏳ Pendente", "✗ Cancelada"]:
-                    menu.add_command(label=status, command=lambda s=status: self._mudar_status_venda(s))
+                menu.add_command(label="✓ Finalizada", command=lambda: self._mudar_status_venda("Finalizada"))
+                menu.add_command(label="⏳ Pendente", command=lambda: self._mudar_status_venda("Pendente"))
+                menu.add_command(label="✗ Cancelada", command=lambda: self._mudar_status_venda("Cancelada"))
                 
             menu.post(event.x_root, event.y_root)
+
     def excluir_logico(self):
         item = self.tree.selection()
         if not item: return
@@ -429,29 +493,47 @@ class SistemaAleSapatilhas:
         id_banco = item[0]
         database.quitar_titulo_financeiro(id_banco, "Dinheiro")
         self.exibir_financeiro()
-    
+
     def filtrar_busca(self):
         termo = self.ent_busca.get().lower()
-        for item in self.tree.get_children(): self.tree.reattach(item, '', 'end')
-        if termo != "" and termo != self.placeholder_busca.lower():
+        # Primeiro, torna todas as linhas visíveis novamente (reattach)
+        for item in self.tree.get_children():
+            self.tree.reattach(item, '', 'end')
+            
+        # Agora oculta (detach) as que não batem com o termo
+        if termo != "":
             for item in self.tree.get_children():
                 valores = self.tree.item(item)['values']
                 if not any(termo in str(v).lower() for v in valores):
                     self.tree.detach(item)
 
     # --- Funções do menu de contexto ---
+    def bloquear_cliente(self):
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+        
+        if messagebox.askyesno("Confirmar", "Deseja bloquear este cliente?", parent=self.root):
+            database.atualizar_cliente(id_banco, status_cliente='Bloqueado')
+            self.exibir_clientes()
+
     def visualizar_cliente(self):
         item = self.tree.selection()
         if not item: return
+        id_banco = item[0]
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT tipo, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito, status_cliente FROM clientes WHERE id = ?", (item[0],))
+            cursor.execute("SELECT tipo, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito, status_cliente FROM clientes WHERE id = ?", (id_banco,))
             dados = cursor.fetchone()
-        if not dados: return
+        if not dados:
+            messagebox.showerror("Erro", "Cliente não encontrado.", parent=self.root)
+            return
         
         janela = tk.Toplevel(self.root)
         janela.title("Visualizar Contato")
         janela.configure(bg=self.bg_fundo)
+        janela.transient(self.root)
+        janela.grab_set()
         ui_utils.calcular_dimensoes_janela(janela, largura_desejada=560, altura_desejada=620)
         
         info_text = f"""
@@ -470,79 +552,120 @@ Observação: {dados[11] or 'N/A'}
 Limite de Crédito: R$ {dados[12]:.2f}
 Status: {dados[13]}
         """
-
         frame = tk.Frame(janela, bg=self.bg_fundo, padx=20, pady=20)
         frame.pack(fill="both", expand=True)
         tk.Label(frame, text="👤 VISUALIZAR CONTATO", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
         tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 10), justify="left", relief="solid", borderwidth=1, padx=10, pady=10).pack(fill="both", expand=True)
         tk.Button(frame, text="FECHAR", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
 
-    def _mudar_status_cliente(self, novo_status):
+    def indisponibilizar_produto(self):
         item = self.tree.selection()
-        if item and messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?"):
-            database.atualizar_cliente(item[0], status_cliente=novo_status)
+        if not item: return
+        id_banco = item[0]
+        
+        if messagebox.askyesno("Confirmar", "Deseja indisponibilizar este produto?", parent=self.root):
+            database.atualizar_produto(id_banco, status_item='Indisponível')
+            self.exibir_produtos()
+
+    def _mudar_status_cliente(self, novo_status):
+        """Altera o status de um cliente"""
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+        
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status_cliente FROM clientes WHERE id=?", (id_banco,))
+            status_atual = cursor.fetchone()[0]
+        
+        if status_atual == novo_status:
+            messagebox.showinfo("Info", f"Cliente já está com status '{novo_status}'.", parent=self.root)
+            return
+        
+        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
+            database.atualizar_cliente(id_banco, status_cliente=novo_status)
             self.exibir_clientes()
 
     def _mudar_status_produto(self, novo_status):
+        """Altera o status de um produto"""
         item = self.tree.selection()
-        if item and messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?"):
-            database.atualizar_produto(item[0], status_item=novo_status)
+        if not item: return
+        id_banco = item[0]
+        
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status_item FROM produtos WHERE id=?", (id_banco,))
+            status_atual = cursor.fetchone()[0]
+        
+        if status_atual == novo_status:
+            messagebox.showinfo("Info", f"Produto já está com status '{novo_status}'.", parent=self.root)
+            return
+        
+        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
+            database.atualizar_produto(id_banco, status_item=novo_status)
             self.exibir_produtos()
 
     def _mudar_status_despesa(self, novo_status):
+        """Altera o status de uma despesa/receita com gerenciamento de data_pagamento"""
         item = self.tree.selection()
-        if not item: 
+        if not item: return
+        id_banco = item[0]
+        
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status, data_pagamento FROM financeiro WHERE id=?", (id_banco,))
+            result = cursor.fetchone()
+            if not result:
+                messagebox.showerror("Erro", "Registro não encontrado.", parent=self.root)
+                return
+            status_atual, data_pagamento_atual = result
+        
+        if status_atual == novo_status:
+            messagebox.showinfo("Info", f"Registro já está com status '{novo_status}'.", parent=self.root)
             return
         
-        id_banco = item[0]
+        # Determinar valor de data_pagamento baseado no novo status
         data_pagamento = None
-
-        # 1. Se o novo status for "Pago", processa a regra da data atual
         if novo_status == "Pago":
-            # Busca a data de pagamento atual no banco de dados
+            data_pagamento = datetime.now().strftime("%Y-%m-%d")
+        elif novo_status in ["Pendente", "Atrasado"]:
+            data_pagamento = None  # Limpar data de pagamento
+        elif novo_status == "Cancelado":
+            data_pagamento = None  # Limpar data de pagamento
+        
+        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
             with database.conectar() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT data_pagamento FROM financeiro WHERE id = ?", (id_banco,))
-                resultado = cursor.fetchone()
-                data_existente = resultado[0] if resultado else None
-
-            hoje = datetime.now().strftime("%Y-%m-%d")
-
-            # Se já existir uma data lançada, pede confirmação para alterá-la
-            if data_existente:
-                data_formatada = self.formatar_data_exibicao(data_existente)
-                pergunta = f"Este registro já foi pago em {data_formatada}.\nDeseja alterar a data do pagamento para hoje ({datetime.now().strftime('%d/%m/%Y')})?"
-                if messagebox.askyesno("Alterar Data de Pagamento", pergunta, parent=self.root):
-                    data_pagamento = hoje
+                if data_pagamento:
+                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = ? WHERE id = ?", (novo_status, data_pagamento, id_banco))
                 else:
-                    # Se o usuário responder "Não", mantém a data que já estava lá
-                    data_pagamento = data_existente
-            else:
-                # Se não havia data, define a data atual automaticamente
-                data_pagamento = hoje
-        else:
-            # 2. Para qualquer outro status (Pendente, Atrasado, Cancelado), a data_pagamento vai como None (NULL)
-            data_pagamento = None
-
-        # 3. Confirmação geral da mudança de status
-        if messagebox.askyesno("Confirmar", f"Deseja realmente alterar o status do registro para '{novo_status}'?", parent=self.root):
-            with database.conectar() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "UPDATE financeiro SET status = ?, data_pagamento = ? WHERE id = ?", 
-                    (novo_status, data_pagamento, id_banco)
-                )
+                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = NULL WHERE id = ?", (novo_status, id_banco))
                 conn.commit()
-            
-            # Atualiza a tela de fluxo de caixa para refletir as mudanças
             self.exibir_financeiro()
 
     def _mudar_status_venda(self, novo_status):
+        """Altera o status de uma venda"""
         item = self.tree.selection()
-        if item and messagebox.askyesno("Confirmar", f"Mudar status da venda para {novo_status}?"):
+        if not item: return
+        id_banco = item[0]
+        
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status FROM vendas WHERE id=?", (id_banco,))
+            result = cursor.fetchone()
+            if not result:
+                messagebox.showerror("Erro", "Venda não encontrada.", parent=self.root)
+                return
+            status_atual = result[0]
+        
+        if status_atual == novo_status:
+            messagebox.showinfo("Info", f"Venda já está com status '{novo_status}'.", parent=self.root)
+            return
+        
+        if messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?", parent=self.root):
             with database.conectar() as conn:
                 cursor = conn.cursor()
-                cursor.execute("UPDATE vendas SET status_venda = ? WHERE id = ?", (novo_status, item[0]))
+                cursor.execute("UPDATE vendas SET status = ? WHERE id = ?", (novo_status, id_banco))
                 conn.commit()
             self.exibir_vendas()
 
@@ -558,26 +681,21 @@ Status: {dados[13]}
         elif self.modo_atual == "dashboard":
             self.exibir_dashboard()
 
-    def editar_venda(self):
+    def editar_despesa(self):
         item = self.tree.selection()
         if not item: return
-        from cadastro_vendas import JanelaCadastroVendas
+        if not messagebox.askyesno("Confirmar", "Deseja editar este lançamento financeiro?", parent=self.root):
+            return
+        id_banco = item[0]
+        
+        from gestao_financeira import JanelaGestaoFinanceira
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT v.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda FROM vendas v JOIN clientes c ON v.cliente_id = c.id WHERE v.id = ?", (item[0],))
+            cursor.execute("SELECT * FROM financeiro WHERE id=?", (id_banco,))
             dados = cursor.fetchone()
             if dados:
-                dados_venda = {'id': dados[0], 'cliente': f"{dados[1]} - {dados[2]}", 'total': dados[3], 'forma': dados[4], 'parcelas': dados[5], 'desconto': dados[6], 'data': dados[7]}
-                JanelaCadastroVendas(self.root, dados_venda=dados_venda)
-                self.exibir_vendas()
-
-    def visualizar_venda(self):
-        item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
-
-        from cadastro_vendas import VisualizarRecibo
-        VisualizarRecibo(self.root, id_venda=item[0])
+                JanelaGestaoFinanceira(self.root, dados_despesa=dados)
+                self.exibir_financeiro()
 
     def visualizar_despesa(self):
         item = self.tree.selection()
@@ -630,18 +748,101 @@ Recorrência: {recorrencia or 'Não Recorrente'}
         tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 10), justify="left", relief="solid", borderwidth=1, padx=10, pady=10).pack(fill="both", expand=True)
         tk.Button(frame, text="FECHAR", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
 
-    def visualizar_item(self):
+    def restaurar_despesa(self):
         item = self.tree.selection()
-        if item:
-            from cadastro_produtos import VisualizarProduto
+        if not item: return
+        id_banco = item[0]
+        
+        # Buscar status atual e data de pagamento
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status, data_pagamento FROM financeiro WHERE id=?", (id_banco,))
+            result = cursor.fetchone()
+            if not result:
+                messagebox.showerror("Erro", "Registro não encontrado.", parent=self.root)
+                return
+            status_atual, data_pagamento_atual = result
+        
+        # Definir status anterior e data anterior
+        novo_status = None
+        nova_data_pagamento = None
+        
+        if status_atual == "Pago":
+            novo_status = "Pendente"
+            nova_data_pagamento = None  # Remover data de pagamento
+        elif status_atual == "Cancelado":
+            novo_status = "Pendente"
+            nova_data_pagamento = None
+        elif status_atual == "Atrasado":
+            novo_status = "Pendente"
+            nova_data_pagamento = None
+        else:
+            messagebox.showinfo("Info", "Registro já está pendente.", parent=self.root)
+            return
+        
+        if messagebox.askyesno("Confirmar", f"Restaurar registro para '{novo_status}'?", parent=self.root):
             with database.conectar() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM produtos WHERE id = ?", (item[0],))
-                dados = cursor.fetchone()
-                if dados: VisualizarProduto(self.root, dados)
+                if nova_data_pagamento:
+                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = ? WHERE id = ?", (novo_status, nova_data_pagamento, id_banco))
+                else:
+                    cursor.execute("UPDATE financeiro SET status = ?, data_pagamento = NULL WHERE id = ?", (novo_status, id_banco))
+                conn.commit()
+            self.exibir_financeiro()
+
+    def editar_venda(self):
+        item = self.tree.selection()
+        if not item: return
+        if not messagebox.askyesno("Confirmar", "Deseja editar esta venda?", parent=self.root):
+            return
+        id_banco = item[0]
+        
+        from cadastro_vendas import JanelaCadastroVendas
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT v.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda
+                FROM vendas v
+                JOIN clientes c ON v.cliente_id = c.id
+                WHERE v.id = ?
+            """, (id_banco,))
+            dados = cursor.fetchone()
+            if dados:
+                dados_venda = {
+                    'id': dados[0],
+                    'cliente': f"{dados[1]} - {dados[2]}",
+                    'total': dados[3],
+                    'forma': dados[4],
+                    'parcelas': dados[5],
+                    'desconto': dados[6],
+                    'data': dados[7]
+                }
+                JanelaCadastroVendas(self.root, dados_venda=dados_venda)
+                self.exibir_vendas()
+
+    def visualizar_venda(self):
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+        
+        from gestao_financeira import VisualizarRecibo
+        VisualizarRecibo(self.root, id_venda=id_banco)
+
+    def visualizar_item(self):
+        item = self.tree.selection()
+        if not item: return
+        id_banco = item[0]
+        
+        from cadastro_produtos import VisualizarProduto
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM produtos WHERE id = ?", (id_banco,))
+            dados = cursor.fetchone()
+            if dados:
+                VisualizarProduto(self.root, dados)
 
     def confirmar_saida(self):
-        if messagebox.askyesno("Sair", "Deseja encerrar o sistema Ale Sapatilhas?"):
+        if messagebox.askyesno("Sair", "Deseja encerrar o sistema Ale Sapatilhas?", parent=self.root):
             self.root.destroy()
 
 if __name__ == "__main__":
