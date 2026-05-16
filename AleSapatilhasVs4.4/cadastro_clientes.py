@@ -23,13 +23,13 @@ class JanelaCadastroClientes(tk.Toplevel):
         self.cor_hover_field = paleta["cor_hover_field"]
         
         # --- Configurações da janela ---
-        self.title("Alê Sapatilhas - Gestão de Cadastros")
+        self.title("Alê Sapatilhas - Gestão de Clientes")
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
 
         self._manter_em_primeiro_plano()
         
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=700, altura_desejada=650)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=720)
 
         self.cliente_id = dados_cliente[0] if dados_cliente else None
         self.texto_btn = "ATUALIZAR CADASTRO" if self.cliente_id else "SALVAR CADASTRO"
@@ -78,12 +78,12 @@ class JanelaCadastroClientes(tk.Toplevel):
         main_frame.columnconfigure((0, 1), weight=1)
 
         # --- Título ---
-        tk.Label(main_frame, text="Ficha Cadastral do Cliente/Fornecedor", bg=self.bg_fundo, 
+        tk.Label(main_frame, text="Ficha Cadastral do Cliente", bg=self.bg_fundo, 
                  fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
         # --- Campos de Entrada ---
         self.ent_nome   = self._criar_campo(main_frame, "NOME COMPLETO*", 1)
-        self.ent_cpf    = self._criar_campo(main_frame, "CPF/CNPJ (APENAS NÚMEROS)*", 3)
+        self.ent_cpf    = self._criar_campo(main_frame, "CPF (APENAS NÚMEROS)*", 3)
         self.ent_tel    = self._criar_campo(main_frame, "TELEFONE / WHATSAPP*", 5, col=0, colspan=1)
         self.ent_email  = self._criar_campo(main_frame, "E-MAIL", 5, col=1, colspan=1)
         self.ent_niver  = self._criar_campo(main_frame, "ANIVERSÁRIO (DD/MM)", 7, col=0, colspan=1)

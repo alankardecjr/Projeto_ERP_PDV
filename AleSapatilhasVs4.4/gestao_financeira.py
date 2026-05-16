@@ -4,7 +4,7 @@ from datetime import datetime
 import database 
 import ui_utils
 
-class JanelaCadastroDespesas(tk.Toplevel):
+class JanelaGestaoFinanceira(tk.Toplevel):
     def __init__(self, master, dados_despesa=None):
         super().__init__(master)
         
@@ -112,8 +112,8 @@ class JanelaCadastroDespesas(tk.Toplevel):
             return ent
 
         # --- Título ---
-        tk.Label(main_frame, text=" Lançamento de Despesa", bg=self.bg_fundo, 
-                 fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 15))
+        tk.Label(main_frame, text=" Lançamento de Financeiro", bg=self.bg_fundo, 
+                 fg=self.cor_texto, font=("Segoe UI", 12, "bold")).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 15))
 
         # --- BUSCA RÁPIDA (Conforme Cadastro Produtos) ---
         tk.Label(main_frame, text="🔍 BUSCA RÁPIDA", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", padx=5, pady=(5, 0))
@@ -591,40 +591,6 @@ class JanelaCadastroDespesas(tk.Toplevel):
             except Exception as e:
                 messagebox.showerror("Erro", f"Erro ao quitar despesa: {str(e)}", parent=self)
 
-    def restaurar_despesa_menu(self):
-        """Restaurar despesa via menu de contexto"""
-        sel = self.tree_busca.selection()
-        if not sel: return
-        id_d = self.tree_busca.item(sel[0])["values"][0]
-        
-        # Buscar status atual
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status FROM financeiro WHERE id=?", (id_d,))
-            status_atual = cursor.fetchone()[0]
-        
-        # Definir status anterior baseado no atual
-        if status_atual == "Pago":
-            novo_status = "Pendente"
-        elif status_atual == "Cancelado":
-            novo_status = "Pendente"
-        elif status_atual == "Atrasado":
-            novo_status = "Pendente"
-        else:
-            messagebox.showinfo("Info", "Não há status anterior para restaurar.", parent=self)
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Restaurar despesa para '{novo_status}'?"):
-            try:
-                database.atualizar_financeiro(id_d, status=novo_status)
-                messagebox.showinfo("Sucesso", "Despesa restaurada!", parent=self)
-                self.atualizar_tree_busca()
-                if hasattr(self.master, "exibir_financeiro"): 
-                    self.master.exibir_financeiro()
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao restaurar despesa: {str(e)}", parent=self)
-
-
 class VisualizarRecibo(tk.Toplevel):
     """Classe para visualizar recibo de venda"""
     def __init__(self, master, id_venda):
@@ -645,9 +611,7 @@ class VisualizarRecibo(tk.Toplevel):
         with database.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT v.id, c.nome, c.cpf, c.telefone, c.email, c.aniversario, c.tamanho_calcado, 
-                       c.endereco_completo, c.bairro, c.cidade, c.cep, c.observacao, c.limite_credito, c.status_cliente,
-                       v.valor_bruto, v.desconto, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.data_venda, v.status_venda, v.vendedor,
+                SELECT v.id, c.nome, c.cpf, c.telefone, c.email, c.endereco_completo, c.bairro, c.cidade, c.cep, v.valor_bruto, v.desconto, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.data_venda, v.status_venda, v.vendedor,
                        GROUP_CONCAT(p.produto || ' (' || vi.quantidade || 'x R$ ' || vi.preco_unitario || ' = R$ ' || vi.subtotal || ')', '\n') as produtos
                 FROM vendas v
                 JOIN clientes c ON v.cliente_id = c.id
@@ -683,15 +647,10 @@ Nome: {dados[1]}
 CPF: {dados[2]}
 Telefone: {dados[3]}
 Email: {dados[4] or 'N/A'}
-Aniversário: {dados[5] or 'N/A'}
-Tamanho Calçado: {dados[6] or 'N/A'}
 Endereço: {dados[7] or 'N/A'}
 Bairro: {dados[8] or 'N/A'}
 Cidade: {dados[9] or 'N/A'}
 CEP: {dados[10] or 'N/A'}
-Observação: {dados[11] or 'N/A'}
-Limite de Crédito: R$ {dados[12]:.2f}
-Status Cliente: {dados[13]}
 
 === DADOS FINANCEIROS ===
 Valor Bruto: R$ {dados[14]:.2f}
@@ -718,6 +677,6 @@ Parcelas: {dados[19]}x
 if __name__ == "__main__":
     root = tk.Tk()
     root.withdraw()
-    JanelaCadastroDespesas(root)
+    JanelaGestaoFinanceira(root)
     root.mainloop()
 

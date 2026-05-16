@@ -305,9 +305,11 @@ def realizar_venda_crediario(cliente_id, lista_produtos, parcelas, desc_venda=0)
         valor_parc = round(total_liquido / parcelas, 2)
         for i in range(parcelas):
             venc = adicionar_meses(datetime.now(), 'Mensal', i).strftime("%Y-%m-%d")
-            cursor.execute("""INSERT INTO receitas (venda_id, cliente_id, descricao, valor_base, valor_esperado, data_vencimento, parcela_atual, total_parcelas) 
-                              VALUES (?,?,?,?,?,?,?,?)""", 
-                           (venda_id, cliente_id, f"Parcela {i+1}/{parcelas} - Venda #{venda_id}", valor_parc, valor_parc, venc, i+1, parcelas))
+
+        cursor.execute("""INSERT INTO financeiro (tipo, venda_id, cliente_id, descricao, valor_base, valor, data_vencimento, parcela_atual, total_parcelas, categoria, status) 
+                  VALUES ('Receita', ?,?,?,?,?,?,?,?, 'Venda', 'Pendente')""", 
+               (venda_id, cliente_id, f"Parcela {i+1}/{parcelas} - Venda #{venda_id}", valor_parc, valor_parc, venc, i+1, parcelas))    
+        
         conn.commit()
 
 def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, desconto_total=0):
@@ -412,6 +414,12 @@ def cancelar_venda(venda_id, motivo="Cancelamento solicitado"):
         except Exception as e:
             conn.rollback()
             return False, f"Erro ao cancelar venda: {str(e)}"
+
+def obter_todos_registros_financeiros():
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, tipo, entidade_nome, descricao, valor, data_vencimento, data_pagamento, forma_pagamento, categoria, recorrencia, status FROM financeiro ORDER BY data_vencimento ASC")
+        return cursor.fetchall()
 
 # --- Financeiro e relatórios ---
 def quitar_titulo_financeiro(financeiro_id, forma_pgto):
